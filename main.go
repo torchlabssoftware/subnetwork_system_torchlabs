@@ -1,7 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"log"
+
+	"github.com/torchlabssoftware/subnetwork_system/config"
+)
 
 func main() {
-	fmt.Print("run")
+	dotenvConfig := config.Load()
+	log.Println("port:", dotenvConfig.PORT)
 }
