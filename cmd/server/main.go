@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/torchlabssoftware/subnetwork_system/config"
+	"github.com/torchlabssoftware/subnetwork_system/internal/config"
 )
 
 func main() {
