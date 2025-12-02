@@ -24,11 +24,11 @@ CREATE TABLE "user" (
     email TEXT UNIQUE,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    data_limit BIGINT,
-    data_usage BIGINT DEFAULT 0,
-    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'deleted')),
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    data_limit BIGINT NOT NULL DEFAULT 0,
+    data_usage BIGINT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'deleted')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE user_ip_whitelist (

@@ -6,6 +6,7 @@ package repository
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -59,11 +60,11 @@ type User struct {
 	Email     sql.NullString
 	Username  string
 	Password  string
-	DataLimit sql.NullInt64
-	DataUsage sql.NullInt64
-	Status    sql.NullString
-	CreatedAt sql.NullTime
-	UpdatedAt sql.NullTime
+	DataLimit int64
+	DataUsage int64
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type UserIpWhitelist struct {

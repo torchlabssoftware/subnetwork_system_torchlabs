@@ -2,66 +2,55 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
-	"github.com/go-chi/chi"
-	"github.com/go-chi/cors"
-	"github.com/google/uuid"
+	db "github.com/torchlabssoftware/subnetwork_system/internal/DB"
 	"github.com/torchlabssoftware/subnetwork_system/internal/config"
-	"github.com/torchlabssoftware/subnetwork_system/internal/repository"
+	"github.com/torchlabssoftware/subnetwork_system/internal/server"
 
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	dotenvConfig := config.Load()
+	envConfig := config.Load()
 
-	router := chi.NewRouter()
-
-	DBURL := dotenvConfig.DBURL
-
-	connection, err := sql.Open("postgres", DBURL)
+	pool, err := db.Connect(envConfig.DBURL)
 	if err != nil {
-		log.Fatalf("cant connect to the database: %v", err)
+		log.Fatal("Failed to init DB:", err)
+	}
+	defer pool.Close()
+
+	router := server.NewRouter(pool)
+
+	srv := &http.Server{
+		Addr:         ":" + envConfig.PORT,
+		Handler:      router,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 20 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
-	queries := repository.New(connection)
-	_, err = queries.CreateUser(context.Background(), repository.CreateUserParams{
-		ID:        uuid.New(),
-		Email:     sql.NullString{String: "pubkkudu.ppp.lk", Valid: true},
-		Username:  "pppk",
-		Password:  "ppp",
-		DataLimit: sql.NullInt64{Int64: 0, Valid: true},
-		DataUsage: sql.NullInt64{Int64: 0, Valid: true},
-		Status:    sql.NullString{String: "active", Valid: true},
-		CreatedAt: sql.NullTime{Time: time.Now(), Valid: true},
-		UpdatedAt: sql.NullTime{Time: time.Now(), Valid: true},
-	})
+	go func() {
+		log.Println("server running in port:", envConfig.PORT)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("server failed")
+		}
+	}()
 
-	if err != nil {
-		log.Printf("", err)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	<-stop
+
+	log.Println("shutdown initiated")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("server shutdown error: %v", err)
 	}
+	log.Println("server stopped")
 
-	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300,
-	}))
-
-	srver := &http.Server{
-		Handler: router,
-		Addr:    ":" + dotenvConfig.PORT,
-	}
-
-	log.Println("Server start on port", dotenvConfig.PORT)
-	err = srver.ListenAndServe()
-	if err != nil {
-		log.Fatal("cannot start http server:", err)
-	}
 }
