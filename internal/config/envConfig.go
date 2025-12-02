@@ -9,7 +9,8 @@ import (
 )
 
 type Config struct {
-	PORT string
+	PORT  string
+	DBURL string
 }
 
 func Load() Config {
@@ -25,7 +26,8 @@ func Load() Config {
 	}
 
 	config := Config{
-		PORT: getEnv("PORT", "8080"),
+		PORT:  getEnv("PORT", "8080"),
+		DBURL: getEnv("DB_URL", ""),
 	}
 
 	config.validate()
@@ -41,7 +43,9 @@ func getEnv(key, fallback string) string {
 }
 
 func (c *Config) validate() {
-	required := map[string]string{}
+	required := map[string]string{
+		"DBURL": c.DBURL,
+	}
 
 	for key, val := range required {
 		if strings.TrimSpace(val) == "" {

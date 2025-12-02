@@ -8,27 +8,39 @@ package repository
 import (
 	"context"
 	"database/sql"
+
+	"github.com/google/uuid"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO "user"(email,username,password,data_limit)
-VALUES ($1,$2,$3,$4)
+INSERT INTO "user"(id,email,username,password,data_limit,data_usage,status,created_at,updated_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 RETURNING id, email, username, password, data_limit, data_usage, status, created_at, updated_at
 `
 
 type CreateUserParams struct {
+	ID        uuid.UUID
 	Email     sql.NullString
 	Username  string
 	Password  string
 	DataLimit sql.NullInt64
+	DataUsage sql.NullInt64
+	Status    sql.NullString
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, createUser,
+		arg.ID,
 		arg.Email,
 		arg.Username,
 		arg.Password,
 		arg.DataLimit,
+		arg.DataUsage,
+		arg.Status,
+		arg.CreatedAt,
+		arg.UpdatedAt,
 	)
 	var i User
 	err := row.Scan(
