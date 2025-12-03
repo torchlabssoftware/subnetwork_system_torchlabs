@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
+	server "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
 type UserHandler struct {
@@ -27,13 +28,8 @@ func (h *UserHandler) Routes() http.Handler {
 	return r
 }
 
-type createUserRequest struct {
-	Email     *string `json:"email,omitempty"`
-	DataLimit *int64  `json:"data_limit"`
-}
-
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var req createUserRequest
+	var req server.CreateUserRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -48,25 +44,85 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		email = sql.NullString{Valid: false}
 	}
 
-	if req.DataLimit == nil {
-		http.Error(w, "data_limit is required", http.StatusBadRequest)
-		return
+	var dataLimit int64
+	if req.DataLimit != nil {
+		dataLimit = *req.DataLimit
+	} else {
+		dataLimit = 0
 	}
 
-	params := repository.CreateUserParams{
-		ID:        uuid.New(),
+	createUserParams := repository.CreateUserParams{
 		Email:     email,
 		Username:  uuid.New().String()[:8],
 		Password:  uuid.New().String()[:8],
-		DataLimit: *req.DataLimit,
+		DataLimit: dataLimit,
 	}
 
-	user, err := h.queries.CreateUser(r.Context(), params)
+	user, err := h.queries.CreateUser(r.Context(), createUserParams)
 	if err != nil {
 		http.Error(w, "failed to create user", http.StatusInternalServerError)
 		log.Printf("cant create new user:%v", err)
 		return
 	}
+
+	var allowPools []string
+	if req.AllowPools != nil && len(*req.AllowPools) > 0 {
+		allowPools = *req.AllowPools
+	} else {
+		allowPools = nil
+	}
+
+	pools, err := h.queries.GetPoolsbyTags(r.Context(), allowPools)
+	if err != nil {
+		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		log.Printf("cant create new user:%v", err)
+		return
+	}
+
+	for _, v := range pools {
+
+		insertUserPoolParams := repository.InsertUserPoolParams{
+			PoolID: v.ID,
+			UserID: user.ID,
+		}
+
+		_, err = h.queries.InsertUserPool(r.Context(), insertUserPoolParams)
+		if err != nil {
+			http.Error(w, "failed to create user", http.StatusInternalServerError)
+			log.Printf("cant create new user:%v", err)
+			return
+		}
+	}
+
+	var ipWhitelist []string
+	if req.IpWhiteList != nil && len(*req.IpWhiteList) > 0 {
+		ipWhitelist = *req.IpWhiteList
+	} else {
+		ipWhitelist = nil
+	}
+
+	for _, v := range ipWhitelist {
+		userIpWhitelistParams := repository.InsertUserIpwhitelistParams{
+			UserID: user.ID,
+			IpCidr: v,
+		}
+
+		_, err = h.queries.InsertUserIpwhitelist(r.Context(), userIpWhitelistParams)
+		if err != nil {
+			http.Error(w, "failed to create user", http.StatusInternalServerError)
+			log.Printf("cant create new user:%v", err)
+			return
+		}
+	}
+
+	responce := server.CreateUserResponce{
+		Username:    &user.Username,
+		Password:    &user.Password,
+		DataLimit:   &user.DataLimit,
+		IpWhitelist: &ipWhitelist,
+		AllowPools:  &allowPools,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(responce)
 }

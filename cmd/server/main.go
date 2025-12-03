@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"time"
 
-	db "github.com/torchlabssoftware/subnetwork_system/internal/DB"
 	"github.com/torchlabssoftware/subnetwork_system/internal/config"
+	db "github.com/torchlabssoftware/subnetwork_system/internal/db"
 	"github.com/torchlabssoftware/subnetwork_system/internal/server"
 
 	_ "github.com/lib/pq"

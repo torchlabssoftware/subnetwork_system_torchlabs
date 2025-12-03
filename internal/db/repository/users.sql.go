@@ -13,13 +13,12 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO "user"(id,email,username,password,data_limit)
-VALUES ($1,$2,$3,$4,$5)
+INSERT INTO "user"(email,username,password,data_limit)
+VALUES ($1,$2,$3,$4)
 RETURNING id, email, username, password, data_limit, data_usage, status, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	ID        uuid.UUID
 	Email     sql.NullString
 	Username  string
 	Password  string
@@ -28,7 +27,6 @@ type CreateUserParams struct {
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, createUser,
-		arg.ID,
 		arg.Email,
 		arg.Username,
 		arg.Password,
@@ -46,5 +44,46 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const insertUserIpwhitelist = `-- name: InsertUserIpwhitelist :one
+INSERT INTO user_ip_whitelist(user_id,ip_cidr)
+VALUES($1,$2)
+RETURNING id, user_id, ip_cidr, created_at
+`
+
+type InsertUserIpwhitelistParams struct {
+	UserID uuid.UUID
+	IpCidr string
+}
+
+func (q *Queries) InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) (UserIpWhitelist, error) {
+	row := q.db.QueryRowContext(ctx, insertUserIpwhitelist, arg.UserID, arg.IpCidr)
+	var i UserIpWhitelist
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.IpCidr,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const insertUserPool = `-- name: InsertUserPool :one
+INSERT INTO user_pools(pool_id,user_id)
+values ($1,$2)
+RETURNING id, pool_id, user_id
+`
+
+type InsertUserPoolParams struct {
+	PoolID uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) InsertUserPool(ctx context.Context, arg InsertUserPoolParams) (UserPool, error) {
+	row := q.db.QueryRowContext(ctx, insertUserPool, arg.PoolID, arg.UserID)
+	var i UserPool
+	err := row.Scan(&i.ID, &i.PoolID, &i.UserID)
 	return i, err
 }

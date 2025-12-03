@@ -29,11 +29,11 @@ func NewRouter(pool *sql.DB) http.Handler {
 		MaxAge:           300,
 	}))
 
-	router.Route("/api/v1", func(r chi.Router) {
+	router.Route("/admin", func(r chi.Router) {
 		q := repository.New(pool)
 
 		h := server.NewUserHandler(q)
-		r.Mount("/users", h.Routes())
+		r.Mount("/user", h.Routes())
 	})
 
 	return router
