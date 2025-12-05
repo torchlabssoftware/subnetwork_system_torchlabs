@@ -41,3 +41,21 @@ type UpdateUserRequest struct {
 	DataLimit *int64  `json:"data_limit"`
 	Status    *string `json:"status"`
 }
+
+type UpdateUserResponce struct {
+	Id        uuid.UUID `json:"id,omitempty"`
+	Email     string    `json:"email,omitempty"`
+	DataLimit int64     `json:"data_limit,omitempty"`
+	Status    string    `json:"status,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
+type GetDatausageReponce struct {
+	DataLimit int64 `json:"data_limit"`
+	DataUsage int64 `json:"data_usage"`
+}
+
+type GetUserPoolResponce struct {
+	UserId uuid.UUID `json:"user_id"`
+	Pools  []string  `json:"pools"`
+}

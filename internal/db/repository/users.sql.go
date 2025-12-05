@@ -135,6 +135,26 @@ func (q *Queries) GetDatausageById(ctx context.Context, id uuid.UUID) (GetDataus
 	return i, err
 }
 
+const getUserPoolsByUserId = `-- name: GetUserPoolsByUserId :one
+select u.id,COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] from  "user" as u
+full join user_pools as up
+on u.id = up.user_id
+WHERE u.id = $1
+group by u.id
+`
+
+type GetUserPoolsByUserIdRow struct {
+	ID      uuid.NullUUID
+	Column2 []string
+}
+
+func (q *Queries) GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserPoolsByUserId, id)
+	var i GetUserPoolsByUserIdRow
+	err := row.Scan(&i.ID, pq.Array(&i.Column2))
+	return i, err
+}
+
 const getUserbyId = `-- name: GetUserbyId :one
 SELECT 
     u.id,
@@ -313,4 +333,14 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const removeUserPool = `-- name: removeUserPool :exec
+DELETE FROM user_pools as up
+WHERE up.user_id = $1
+`
+
+func (q *Queries) removeUserPool(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, removeUserPool, userID)
+	return err
 }

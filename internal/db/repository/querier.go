@@ -15,11 +15,13 @@ type Querier interface {
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
 	GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]uuid.UUID, error)
+	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error)
 	InsertUserPool(ctx context.Context, arg InsertUserPoolParams) ([]UserPool, error)
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	removeUserPool(ctx context.Context, userID uuid.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)

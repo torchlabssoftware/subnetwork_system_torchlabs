@@ -34,6 +34,9 @@ func (h *UserHandler) Routes() http.Handler {
 	r.Patch("/{id}", h.updateUser)
 	r.Delete("/{id}", h.deleteUser)
 	r.Get("/{id}/data-usage", h.getDataUsage)
+	r.Get("/{id}/pools", h.getUserAllowPools)
+	//r.Patch("/{id}/pools", h.addUserAllowPool)
+	//r.Delete("/{id}/pools", h.removeUserAllowPool)
 	return r
 }
 
@@ -233,7 +236,7 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		ID: id,
 	}
 
-	if req.Email != nil && *req.Email != "" {
+	if req.Email != nil {
 		mail, err := mail.ParseAddress(*req.Email)
 		if err != nil {
 			functions.RespondwithError(w, http.StatusBadRequest, "enter correct email", err)
@@ -256,7 +259,15 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusOK, user)
+	resp := server.UpdateUserResponce{
+		Id:        user.ID,
+		Email:     user.Email.String,
+		DataLimit: user.DataLimit,
+		Status:    user.Status,
+		UpdatedAt: user.UpdatedAt,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, resp)
 }
 
 func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -297,13 +308,55 @@ func (h *UserHandler) getDataUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := struct {
-		DataLimit int64 `json:"data_limit"`
-		DataUsage int64 `json:"data_usage"`
-	}{
+	res := server.GetDatausageReponce{
 		DataLimit: dataUsage.DataLimit,
 		DataUsage: dataUsage.DataUsage,
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)
 }
+
+func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+
+	userPool, err := h.queries.GetUserPoolsByUserId(r.Context(), id)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	resp := server.GetUserPoolResponce{
+		UserId: userPool.ID.UUID,
+		Pools:  userPool.Column2,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, resp)
+
+}
+
+/*func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+}
+
+func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+}
+*/

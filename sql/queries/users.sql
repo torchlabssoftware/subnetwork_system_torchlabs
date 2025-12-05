@@ -72,3 +72,15 @@ WHERE id = $1;
 -- name: GetDatausageById :one
 SELECT u.data_limit,u.data_usage FROM "user" as u
 WHERE u.id = $1;
+
+-- name: GetUserPoolsByUserId :one
+select u.id,COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] from  "user" as u
+full join user_pools as up
+on u.id = up.user_id
+WHERE u.id = $1
+group by u.id;
+
+-- name: removeUserPool :exec
+DELETE FROM user_pools as up
+WHERE up.user_id = $1;
+
