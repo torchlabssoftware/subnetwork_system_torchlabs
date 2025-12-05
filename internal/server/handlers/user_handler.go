@@ -293,7 +293,7 @@ func (h *UserHandler) getDataUsage(w http.ResponseWriter, r *http.Request) {
 
 	dataUsage, err := h.queries.GetDatausageById(r.Context(), id)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error.cannot get data usage by id", err)
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"runtime"
 )
 
 func RespondwithJSON(w http.ResponseWriter, code int, payload interface{}) {
@@ -19,9 +20,20 @@ func RespondwithJSON(w http.ResponseWriter, code int, payload interface{}) {
 }
 
 func RespondwithError(w http.ResponseWriter, code int, message string, err error) {
-	//if code > 499 {
-	log.Println("Responding with 5xx error:", message, err)
-	//}
+	_, file, line, ok := runtime.Caller(1)
+
+	if ok {
+		shortFile := file
+		for i := len(file) - 1; i > 0; i-- {
+			if file[i] == '/' {
+				shortFile = file[i+1:]
+				break
+			}
+		}
+		log.Printf("[ERROR] %s:%d : %v", shortFile, line, err)
+	} else {
+		log.Printf("[ERROR] %v", err)
+	}
 
 	payload := struct {
 		Error string `json:"error"`
