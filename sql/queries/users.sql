@@ -61,3 +61,10 @@ status = COALESCE(sqlc.narg('status'),status),
 updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
+
+-- name: SoftDeleteUser :exec
+UPDATE "user" 
+SET 
+status = 'deleted',
+updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;

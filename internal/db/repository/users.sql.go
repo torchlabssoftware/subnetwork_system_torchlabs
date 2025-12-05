@@ -245,6 +245,19 @@ func (q *Queries) InsertUserPool(ctx context.Context, arg InsertUserPoolParams) 
 	return items, nil
 }
 
+const softDeleteUser = `-- name: SoftDeleteUser :exec
+UPDATE "user" 
+SET 
+status = 'deleted',
+updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, softDeleteUser, id)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE "user" 
 SET 

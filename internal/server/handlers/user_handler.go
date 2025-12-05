@@ -32,6 +32,7 @@ func (h *UserHandler) Routes() http.Handler {
 	r.Get("/", h.getUsers)
 	r.Get("/{id}", h.getUserbyId)
 	r.Patch("/{id}", h.updateUser)
+	r.Delete("/{id}", h.deleteUser)
 	return r
 }
 
@@ -53,7 +54,6 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	var req server.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "invalid request body", err)
-		fmt.Print(err)
 		return
 	}
 
@@ -219,14 +219,12 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(userId)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
-		fmt.Println(err)
 		return
 	}
 
 	var req server.UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "invalid body", err)
-		fmt.Println(err)
 		return
 	}
 
@@ -258,4 +256,27 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, user)
+}
+
+func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+
+	if err := h.queries.SoftDeleteUser(r.Context(), id); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	res := struct {
+		Message string
+	}{
+		Message: "user deleted",
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
 }

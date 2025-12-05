@@ -17,6 +17,7 @@ type Querier interface {
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error)
 	InsertUserPool(ctx context.Context, arg InsertUserPoolParams) ([]UserPool, error)
+	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 }
 
