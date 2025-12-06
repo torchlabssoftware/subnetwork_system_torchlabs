@@ -84,3 +84,23 @@ group by u.id;
 DELETE FROM user_pools as up
 WHERE up.user_id = $1;
 
+
+-- name: AddUserPoolsByPoolTags :one
+WITH matching_pools AS (
+    SELECT id, tag
+    FROM pool 
+    WHERE tag = ANY($2::text[])
+), 
+inserted_rows AS (
+    INSERT INTO user_pools (user_id, pool_id)
+    SELECT $1, id FROM matching_pools
+    ON CONFLICT (user_id, pool_id) DO NOTHING
+    RETURNING pool_id, user_id
+)
+SELECT 
+    i.user_id, 
+    ARRAY_AGG(p.tag)::TEXT[] AS inserted_tags
+FROM inserted_rows i
+JOIN matching_pools p ON i.pool_id = p.id
+GROUP BY i.user_id;
+

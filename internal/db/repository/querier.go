@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)

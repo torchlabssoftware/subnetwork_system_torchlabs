@@ -355,18 +355,12 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pools, err := h.queries.GetPoolsbyTags(r.Context(), req.UserPool)
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
-		return
-	}
-
-	arg := repository.InsertUserPoolParams{
+	args := repository.AddUserPoolsByPoolTagsParams{
 		UserID:  id,
-		Column2: pools,
+		Column2: req.UserPool,
 	}
 
-	_, err = h.queries.InsertUserPool(r.Context(), arg)
+	pool, err := h.queries.AddUserPoolsByPoolTags(r.Context(), args)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return
@@ -374,7 +368,7 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 
 	res := server.AddUserPoolResponce{
 		UserId:   id,
-		UserPool: req.UserPool,
+		UserPool: pool.InsertedTags,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
