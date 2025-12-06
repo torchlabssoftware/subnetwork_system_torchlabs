@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
 	GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]uuid.UUID, error)

@@ -86,6 +86,26 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteUserPoolsByTags = `-- name: DeleteUserPoolsByTags :exec
+DELETE FROM user_pools
+WHERE user_id = $1
+  AND pool_id IN (
+      SELECT id 
+      FROM pool 
+      WHERE tag = ANY($2::text[]) 
+  )
+`
+
+type DeleteUserPoolsByTagsParams struct {
+	UserID  uuid.UUID
+	Column2 []string
+}
+
+func (q *Queries) DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteUserPoolsByTags, arg.UserID, pq.Array(arg.Column2))
+	return err
+}
+
 const getAllusers = `-- name: GetAllusers :many
 SELECT 
     u.id,

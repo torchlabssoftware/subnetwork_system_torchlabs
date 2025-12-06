@@ -104,3 +104,12 @@ FROM inserted_rows i
 JOIN matching_pools p ON i.pool_id = p.id
 GROUP BY i.user_id;
 
+-- name: DeleteUserPoolsByTags :exec
+DELETE FROM user_pools
+WHERE user_id = $1
+  AND pool_id IN (
+      SELECT id 
+      FROM pool 
+      WHERE tag = ANY($2::text[]) 
+  );
+

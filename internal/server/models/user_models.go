@@ -68,3 +68,7 @@ type AddUserPoolResponce struct {
 	UserId   uuid.UUID `json:"user_id,omitempty"`
 	UserPool []string  `json:"user_pool,omitempty"`
 }
+
+type DeleteUserpoolRequest struct {
+	UserPool []string `json:"user_pool"`
+}

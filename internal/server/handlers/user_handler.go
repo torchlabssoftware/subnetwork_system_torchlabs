@@ -36,7 +36,7 @@ func (h *UserHandler) Routes() http.Handler {
 	r.Get("/{id}/data-usage", h.getDataUsage)
 	r.Get("/{id}/pools", h.getUserAllowPools)
 	r.Post("/{id}/pools", h.addUserAllowPool)
-	//r.Delete("/{id}/pools", h.removeUserAllowPool)
+	r.Delete("/{id}/pools", h.removeUserAllowPool)
 	return r
 }
 
@@ -103,18 +103,12 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		allowPools = *req.AllowPools
 	}
 
-	pools, err := qtx.GetPoolsbyTags(r.Context(), allowPools)
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-
-	insertUserPoolParams := repository.InsertUserPoolParams{
+	poolArgs := repository.AddUserPoolsByPoolTagsParams{
 		UserID:  user.ID,
-		Column2: pools,
+		Column2: allowPools,
 	}
 
-	_, err = qtx.InsertUserPool(r.Context(), insertUserPoolParams)
+	addedPools, err := qtx.AddUserPoolsByPoolTags(r.Context(), poolArgs)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
 		return
@@ -148,7 +142,7 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		Password:    user.Password,
 		DataLimit:   user.DataLimit,
 		IpWhitelist: ipWhitelist,
-		AllowPools:  allowPools,
+		AllowPools:  addedPools.InsertedTags,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, responce)
@@ -374,7 +368,7 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 	functions.RespondwithJSON(w, http.StatusCreated, res)
 }
 
-/*func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request) {
 	//get the user id
 	userId := chi.URLParam(r, "id")
 	id, err := uuid.Parse(userId)
@@ -382,5 +376,23 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
 		return
 	}
+
+	var req server.DeleteUserpoolRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	arg := repository.DeleteUserPoolsByTagsParams{
+		UserID:  id,
+		Column2: req.UserPool,
+	}
+
+	err = h.queries.DeleteUserPoolsByTags(r.Context(), arg)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, nil)
 }
-*/
