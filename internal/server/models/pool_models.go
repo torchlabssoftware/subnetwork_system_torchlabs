@@ -55,3 +55,37 @@ type CreateCountryResponce struct {
 type DeleteCountryRequest struct {
 	Name string `json:"name"`
 }
+
+type GetUpstreamResponce struct {
+	Id               uuid.UUID `json:"id"`
+	UpstreamProvider string    `json:"upstream_provider"`
+	Format           string    `json:"format"`
+	Port             int       `json:"port"`
+	Domain           string    `json:"domain"`
+	PoolId           uuid.UUID `json:"pool_id"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at "`
+}
+
+type CreateUpstreamRequest struct {
+	UpstreamProvider *string    `json:"upstream_provider"`
+	Format           *string    `json:"format"`
+	Port             *int       `json:"port"`
+	Domain           *string    `json:"domain"`
+	PoolId           *uuid.UUID `json:"pool_id"`
+}
+
+type CreateUpstreamResponce struct {
+	Id               uuid.UUID `json:"id"`
+	UpstreamProvider string    `json:"upstream_provider"`
+	Format           string    `json:"format"`
+	Port             int       `json:"port"`
+	Domain           string    `json:"domain"`
+	PoolId           uuid.UUID `json:"pool_id"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at "`
+}
+
+type DeleteUpstreamRequest struct {
+	Id uuid.UUID `json:"id"`
+}

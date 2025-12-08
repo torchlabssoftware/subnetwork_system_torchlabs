@@ -55,6 +55,42 @@ func (q *Queries) AddRegion(ctx context.Context, name string) (Region, error) {
 	return i, err
 }
 
+const addUpstream = `-- name: AddUpstream :one
+INSERT INTO upstream(upstream_provider,format,port,domain,pool_id)
+VALUES($1,$2,$3,$4,$5)
+RETURNING id, upstream_provider, format, port, domain, pool_id, created_at, updated_at
+`
+
+type AddUpstreamParams struct {
+	UpstreamProvider string
+	Format           string
+	Port             int32
+	Domain           string
+	PoolID           uuid.UUID
+}
+
+func (q *Queries) AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstream, error) {
+	row := q.db.QueryRowContext(ctx, addUpstream,
+		arg.UpstreamProvider,
+		arg.Format,
+		arg.Port,
+		arg.Domain,
+		arg.PoolID,
+	)
+	var i Upstream
+	err := row.Scan(
+		&i.ID,
+		&i.UpstreamProvider,
+		&i.Format,
+		&i.Port,
+		&i.Domain,
+		&i.PoolID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteCountry = `-- name: DeleteCountry :exec
 DELETE FROM country as c
 where c.name = $1
@@ -74,6 +110,17 @@ RETURNING id, name, created_at, updated_at
 
 func (q *Queries) DeleteRegion(ctx context.Context, name string) error {
 	_, err := q.db.ExecContext(ctx, deleteRegion, name)
+	return err
+}
+
+const deleteUpstream = `-- name: DeleteUpstream :exec
+DELETE FROM upstream as u
+where u.id = $1
+RETURNING id, upstream_provider, format, port, domain, pool_id, created_at, updated_at
+`
+
+func (q *Queries) DeleteUpstream(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteUpstream, id)
 	return err
 }
 
@@ -127,6 +174,42 @@ func (q *Queries) GetRegions(ctx context.Context) ([]Region, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUpstreams = `-- name: GetUpstreams :many
+SELECT id, upstream_provider, format, port, domain, pool_id, created_at, updated_at FROM upstream
+`
+
+func (q *Queries) GetUpstreams(ctx context.Context) ([]Upstream, error) {
+	rows, err := q.db.QueryContext(ctx, getUpstreams)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Upstream
+	for rows.Next() {
+		var i Upstream
+		if err := rows.Scan(
+			&i.ID,
+			&i.UpstreamProvider,
+			&i.Format,
+			&i.Port,
+			&i.Domain,
+			&i.PoolID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

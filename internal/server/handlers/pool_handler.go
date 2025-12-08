@@ -32,6 +32,9 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Get("/country", p.getcountries)
 	r.Post("/country", p.createCountry)
 	r.Delete("/country", p.DeleteCountry)
+	r.Get("/upstream", p.getUpstreams)
+	r.Post("/upstream", p.createUpstream)
+	r.Delete("/upstream", p.DeleteUpstream)
 	return r
 }
 
@@ -179,6 +182,100 @@ func (p *PoolHandler) DeleteCountry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := p.Queries.DeleteCountry(r.Context(), req.Name)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "deleted",
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (p *PoolHandler) getUpstreams(w http.ResponseWriter, r *http.Request) {
+
+	upstreams, err := p.Queries.GetUpstreams(r.Context())
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	res := []models.GetUpstreamResponce{}
+
+	for _, upstream := range upstreams {
+		r := models.GetUpstreamResponce{
+			Id:               upstream.ID,
+			UpstreamProvider: upstream.UpstreamProvider,
+			Format:           upstream.Format,
+			Domain:           upstream.Domain,
+			Port:             int(upstream.Port),
+			PoolId:           upstream.PoolID,
+			CreatedAt:        upstream.CreatedAt.Time,
+			UpdatedAt:        upstream.UpdatedAt.Time,
+		}
+
+		res = append(res, r)
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+}
+
+func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateUpstreamRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
+		return
+	}
+
+	if (req.UpstreamProvider == nil && *req.UpstreamProvider == "") ||
+		(req.Format == nil && *req.Format == "") ||
+		req.Port == nil ||
+		(req.Domain == nil && *req.Domain == "") ||
+		(req.PoolId == nil) {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
+		return
+	}
+
+	args := repository.AddUpstreamParams{
+		UpstreamProvider: *req.UpstreamProvider,
+		Format:           *req.Format,
+		Port:             int32(*req.Port),
+		Domain:           *req.Domain,
+		PoolID:           *req.PoolId,
+	}
+
+	upstream, err := p.Queries.AddUpstream(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	res := models.CreateUpstreamResponce{
+		Id:               upstream.ID,
+		UpstreamProvider: upstream.UpstreamProvider,
+		Format:           upstream.Format,
+		Port:             int(upstream.Port),
+		Domain:           upstream.Domain,
+		PoolId:           upstream.PoolID,
+		CreatedAt:        upstream.CreatedAt.Time,
+		UpdatedAt:        upstream.UpdatedAt.Time,
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+}
+
+func (p *PoolHandler) DeleteUpstream(w http.ResponseWriter, r *http.Request) {
+	var req models.DeleteUpstreamRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
+		return
+	}
+
+	err := p.Queries.DeleteUpstream(r.Context(), req.Id)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
 		return

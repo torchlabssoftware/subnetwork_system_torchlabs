@@ -23,3 +23,16 @@ RETURNING *;
 DELETE FROM country as c
 where c.name = $1
 RETURNING *;
+
+-- name: GetUpstreams :many
+SELECT * FROM upstream;
+
+-- name: AddUpstream :one
+INSERT INTO upstream(upstream_provider,format,port,domain,pool_id)
+VALUES($1,$2,$3,$4,$5)
+RETURNING *;
+
+-- name: DeleteUpstream :exec
+DELETE FROM upstream as u
+where u.id = $1
+RETURNING *;
