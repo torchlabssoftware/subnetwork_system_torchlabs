@@ -13,17 +13,16 @@ import (
 type Querier interface {
 	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
-	GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]uuid.UUID, error)
+	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error)
 	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error)
-	InsertUserPool(ctx context.Context, arg InsertUserPoolParams) ([]UserPool, error)
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
-	removeUserPool(ctx context.Context, userID uuid.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)

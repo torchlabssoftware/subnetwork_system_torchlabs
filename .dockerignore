@@ -2,3 +2,6 @@
 .env.prod
 .gitignore
 .git
+tmp/
+.air.toml
+dump_data.txt

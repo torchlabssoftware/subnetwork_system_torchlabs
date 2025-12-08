@@ -37,6 +37,9 @@ func (h *UserHandler) Routes() http.Handler {
 	r.Get("/{id}/pools", h.getUserAllowPools)
 	r.Post("/{id}/pools", h.addUserAllowPool)
 	r.Delete("/{id}/pools", h.removeUserAllowPool)
+	r.Get("/{id}/ipwhitelist", h.getUserIpWhitelist)
+	r.Post("/{id}/ipwhitelist", h.addUserIpWhitelist)
+	r.Delete("/{id}/ipwhitelist", h.removeUserIpWhitelist)
 	return r
 }
 
@@ -326,7 +329,7 @@ func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) 
 	}
 
 	resp := server.GetUserPoolResponce{
-		UserId: userPool.ID.UUID,
+		UserId: userPool.ID,
 		Pools:  userPool.Column2,
 	}
 
@@ -389,6 +392,93 @@ func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request
 	}
 
 	err = h.queries.DeleteUserPoolsByTags(r.Context(), arg)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, nil)
+}
+
+func (h *UserHandler) getUserIpWhitelist(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+
+	userPool, err := h.queries.GetUserIpwhitelistByUserId(r.Context(), id)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	resp := server.GetUserIpwhitelistResponce{
+		UserId:      userPool.UserID,
+		IpWhitelist: userPool.IpList,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, resp)
+
+}
+
+func (h *UserHandler) addUserIpWhitelist(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+
+	var req server.AddUserIpwhitelistRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	args := repository.InsertUserIpwhitelistParams{
+		UserID:  id,
+		Column2: req.IpWhitelist,
+	}
+
+	_, err = h.queries.InsertUserIpwhitelist(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	res := server.AddUserIpwhitelistResponce{
+		UserId:      id,
+		IpWhitelist: req.IpWhitelist,
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+}
+
+func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+
+	var req server.DeleteUserIpwhitelistRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	arg := repository.DeleteUserIpwhitelistParams{
+		UserID:  id,
+		Column2: req.IpCidr,
+	}
+
+	err = h.queries.DeleteUserIpwhitelist(r.Context(), arg)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return

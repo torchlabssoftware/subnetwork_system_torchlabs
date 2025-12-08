@@ -72,3 +72,21 @@ type AddUserPoolResponce struct {
 type DeleteUserpoolRequest struct {
 	UserPool []string `json:"user_pool"`
 }
+
+type GetUserIpwhitelistResponce struct {
+	UserId      uuid.UUID `json:"user_id"`
+	IpWhitelist []string  `json:"ip_whitelist"`
+}
+
+type AddUserIpwhitelistRequest struct {
+	IpWhitelist []string `json:"ip_whitelist"`
+}
+
+type AddUserIpwhitelistResponce struct {
+	UserId      uuid.UUID `json:"user_id,omitempty"`
+	IpWhitelist []string  `json:"ip_whitelist,omitempty"`
+}
+
+type DeleteUserIpwhitelistRequest struct {
+	IpCidr []string `json:"ip_cidr"`
+}

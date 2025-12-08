@@ -3,11 +3,6 @@ INSERT INTO "user"(email,username,password,data_limit)
 VALUES ($1,$2,$3,$4)
 RETURNING *;
 
--- name: InsertUserPool :many
-INSERT INTO user_pools(user_id,pool_id)
-SELECT $1, UNNEST($2::uuid[])
-RETURNING *;
-
 -- name: InsertUserIpwhitelist :many
 INSERT INTO user_ip_whitelist(user_id,ip_cidr)
 SELECT $1, UNNEST($2::text[])
@@ -75,15 +70,10 @@ WHERE u.id = $1;
 
 -- name: GetUserPoolsByUserId :one
 select u.id,COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] from  "user" as u
-full join user_pools as up
+join user_pools as up
 on u.id = up.user_id
 WHERE u.id = $1
 group by u.id;
-
--- name: removeUserPool :exec
-DELETE FROM user_pools as up
-WHERE up.user_id = $1;
-
 
 -- name: AddUserPoolsByPoolTags :one
 WITH matching_pools AS (
@@ -112,4 +102,26 @@ WHERE user_id = $1
       FROM pool 
       WHERE tag = ANY($2::text[]) 
   );
+
+-- name: GetUserIpwhitelistByUserId :one
+SELECT 
+    u.id AS user_id, 
+    COALESCE(
+        ARRAY_AGG(DISTINCT w.ip_cidr) FILTER (WHERE w.ip_cidr IS NOT NULL), 
+        '{}'
+    )::TEXT[] AS ip_list
+FROM "user" u                       
+LEFT JOIN user_ip_whitelist w      
+    ON u.id = w.user_id
+WHERE u.id = $1
+GROUP BY u.id;
+
+-- name: DeleteUserIpwhitelist :exec
+DELETE FROM user_ip_whitelist
+WHERE user_id = $1
+  AND ip_cidr = ANY($2::TEXT[]);
+
+
+
+
 

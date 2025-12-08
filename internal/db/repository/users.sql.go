@@ -86,6 +86,22 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteUserIpwhitelist = `-- name: DeleteUserIpwhitelist :exec
+DELETE FROM user_ip_whitelist
+WHERE user_id = $1
+  AND ip_cidr = ANY($2::TEXT[])
+`
+
+type DeleteUserIpwhitelistParams struct {
+	UserID  uuid.UUID
+	Column2 []string
+}
+
+func (q *Queries) DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error {
+	_, err := q.db.ExecContext(ctx, deleteUserIpwhitelist, arg.UserID, pq.Array(arg.Column2))
+	return err
+}
+
 const deleteUserPoolsByTags = `-- name: DeleteUserPoolsByTags :exec
 DELETE FROM user_pools
 WHERE user_id = $1
@@ -192,16 +208,42 @@ func (q *Queries) GetDatausageById(ctx context.Context, id uuid.UUID) (GetDataus
 	return i, err
 }
 
+const getUserIpwhitelistByUserId = `-- name: GetUserIpwhitelistByUserId :one
+SELECT 
+    u.id AS user_id, 
+    COALESCE(
+        ARRAY_AGG(DISTINCT w.ip_cidr) FILTER (WHERE w.ip_cidr IS NOT NULL), 
+        '{}'
+    )::TEXT[] AS ip_list
+FROM "user" u                       
+LEFT JOIN user_ip_whitelist w      
+    ON u.id = w.user_id
+WHERE u.id = $1
+GROUP BY u.id
+`
+
+type GetUserIpwhitelistByUserIdRow struct {
+	UserID uuid.UUID
+	IpList []string
+}
+
+func (q *Queries) GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserIpwhitelistByUserId, id)
+	var i GetUserIpwhitelistByUserIdRow
+	err := row.Scan(&i.UserID, pq.Array(&i.IpList))
+	return i, err
+}
+
 const getUserPoolsByUserId = `-- name: GetUserPoolsByUserId :one
 select u.id,COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] from  "user" as u
-full join user_pools as up
+join user_pools as up
 on u.id = up.user_id
 WHERE u.id = $1
 group by u.id
 `
 
 type GetUserPoolsByUserIdRow struct {
-	ID      uuid.NullUUID
+	ID      uuid.UUID
 	Column2 []string
 }
 
@@ -305,40 +347,6 @@ func (q *Queries) InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhi
 	return items, nil
 }
 
-const insertUserPool = `-- name: InsertUserPool :many
-INSERT INTO user_pools(user_id,pool_id)
-SELECT $1, UNNEST($2::uuid[])
-RETURNING id, pool_id, user_id
-`
-
-type InsertUserPoolParams struct {
-	UserID  uuid.UUID
-	Column2 []uuid.UUID
-}
-
-func (q *Queries) InsertUserPool(ctx context.Context, arg InsertUserPoolParams) ([]UserPool, error) {
-	rows, err := q.db.QueryContext(ctx, insertUserPool, arg.UserID, pq.Array(arg.Column2))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UserPool
-	for rows.Next() {
-		var i UserPool
-		if err := rows.Scan(&i.ID, &i.PoolID, &i.UserID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const softDeleteUser = `-- name: SoftDeleteUser :exec
 UPDATE "user" 
 SET 
@@ -390,14 +398,4 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const removeUserPool = `-- name: removeUserPool :exec
-DELETE FROM user_pools as up
-WHERE up.user_id = $1
-`
-
-func (q *Queries) removeUserPool(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, removeUserPool, userID)
-	return err
 }
