@@ -11,8 +11,9 @@ import (
 )
 
 type WorkerHandler struct {
-	queries *repository.Queries
-	db      *sql.DB
+	queries   *repository.Queries
+	db        *sql.DB
+	wsManager *wsm.WebsocketManager
 }
 
 func NewWorkerHandler(q *repository.Queries, db *sql.DB) *WorkerHandler {
@@ -20,6 +21,7 @@ func NewWorkerHandler(q *repository.Queries, db *sql.DB) *WorkerHandler {
 		queries: q,
 		db:      db,
 	}
+	w.wsManager = wsm.NewWebsocketManager(q)
 	return w
 }
 
@@ -32,6 +34,5 @@ func (ws *WorkerHandler) Routes() http.Handler {
 }
 
 func (ws *WorkerHandler) serveWS(w http.ResponseWriter, r *http.Request) {
-	newWSM := wsm.NewWebsocketManager()
-	newWSM.ServeWS(w, r)
+	ws.wsManager.ServeWS(w, r)
 }

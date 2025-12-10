@@ -32,6 +32,7 @@ func NewWorker(conn *websocket.Conn, manager *WebsocketManager) *Worker {
 func (w *Worker) ReadMessage() {
 	defer func() {
 		w.Manager.RemoveWorker(w)
+		w.Connection.Close()
 	}()
 
 	if err := w.Connection.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
@@ -61,12 +62,18 @@ func (w *Worker) ReadMessage() {
 
 		if err := w.Manager.RouteEvent(request, w); err != nil {
 			log.Println("Error handleing message: ", err)
+			w.egress <- Event{
+				Type:    "error",
+				Payload: errorPayload{Success: false, Payload: err.Error()},
+			}
 		}
 	}
 }
 
 func (w *Worker) WriteMessage() {
 	defer func() {
+		close(w.egress)
+		w.Connection.Close()
 		w.Manager.RemoveWorker(w)
 	}()
 

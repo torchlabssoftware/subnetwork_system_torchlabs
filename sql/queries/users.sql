@@ -121,6 +121,11 @@ DELETE FROM user_ip_whitelist
 WHERE user_id = $1
   AND ip_cidr = ANY($2::TEXT[]);
 
+-- name: GetUserByUsername :one
+SELECT *
+FROM "user"
+WHERE username = $1;
+
 
 
 

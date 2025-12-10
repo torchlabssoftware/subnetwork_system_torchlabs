@@ -1,12 +1,15 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 )
 
@@ -24,19 +27,21 @@ type WebsocketManager struct {
 	Workers WorkerList
 	sync.RWMutex
 	Handlers map[string]EventHandler
+	queries  *repository.Queries
 }
 
-func NewWebsocketManager() *WebsocketManager {
+func NewWebsocketManager(queries *repository.Queries) *WebsocketManager {
 	w := &WebsocketManager{
 		Workers:  make(WorkerList),
 		Handlers: make(map[string]EventHandler),
+		queries:  queries,
 	}
 	w.setupEventHandlers()
 	return w
 }
 
 func (ws *WebsocketManager) setupEventHandlers() {
-
+	ws.Handlers["login"] = ws.handleLogin
 }
 
 func (ws *WebsocketManager) RouteEvent(event Event, w *Worker) error {
@@ -56,7 +61,6 @@ func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusBadRequest, "Could not open websocket connection", err)
 		return
 	}
-	defer conn.Close()
 
 	log.Println("Worker connected via WebSocket.")
 
@@ -64,6 +68,38 @@ func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request) {
 	ws.AddWorker(worker)
 	go worker.ReadMessage()
 	go worker.WriteMessage()
+}
+
+func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
+	var payload loginPayload
+	if m, ok := event.Payload.(map[string]interface{}); ok {
+		data, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("could not marshal payload map: %v", err)
+		}
+
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return fmt.Errorf("invalid login payload: %v", err)
+		}
+	} else {
+		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
+	}
+
+	user, err := ws.queries.GetUserByUsername(context.Background(), payload.Username)
+	if err != nil {
+		return fmt.Errorf("user login failed: %v", err)
+	}
+
+	if user.Password != payload.Password {
+		return fmt.Errorf("login failed: incorrect password")
+	}
+
+	w.egress <- Event{
+		Type:    "login_success",
+		Payload: successPayload{Success: true, Payload: user},
+	}
+
+	return nil
 }
 
 func (ws *WebsocketManager) AddWorker(w *Worker) {

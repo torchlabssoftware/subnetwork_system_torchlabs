@@ -26,6 +26,7 @@ type Querier interface {
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
 	GetRegions(ctx context.Context) ([]Region, error)
 	GetUpstreams(ctx context.Context) ([]Upstream, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error)
 	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)

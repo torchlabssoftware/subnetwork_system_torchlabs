@@ -208,6 +208,29 @@ func (q *Queries) GetDatausageById(ctx context.Context, id uuid.UUID) (GetDataus
 	return i, err
 }
 
+const getUserByUsername = `-- name: GetUserByUsername :one
+SELECT id, email, username, password, data_limit, data_usage, status, created_at, updated_at
+FROM "user"
+WHERE username = $1
+`
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.Password,
+		&i.DataLimit,
+		&i.DataUsage,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserIpwhitelistByUserId = `-- name: GetUserIpwhitelistByUserId :one
 SELECT 
     u.id AS user_id, 
