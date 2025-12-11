@@ -3,3 +3,36 @@ INSERT INTO worker (name, region_id, ip_address)
 VALUES ($1,(SELECT id from region where region.name = $2), $3)
 RETURNING *;
 
+-- name: GetAllWorkers :many
+SELECT 
+    w.id, 
+    w.name, 
+    w.ip_address, 
+    w.status, 
+    w.last_seen, 
+    w.created_at, 
+    w.updated_at,
+    r.name AS region_name,
+    COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
+FROM worker w
+JOIN region r ON w.region_id = r.id
+LEFT JOIN worker_domains wd ON w.id = wd.worker_id
+GROUP BY w.id, r.name;
+
+-- name: GetWorkerByName :one
+SELECT 
+    w.id, 
+    w.name, 
+    w.ip_address, 
+    w.status, 
+    w.last_seen, 
+    w.created_at, 
+    w.updated_at,
+    r.name AS region_name,
+    COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
+FROM worker w
+JOIN region r ON w.region_id = r.id
+LEFT JOIN worker_domains wd ON w.id = wd.worker_id
+WHERE w.name = $1
+GROUP BY w.id, r.name;
+

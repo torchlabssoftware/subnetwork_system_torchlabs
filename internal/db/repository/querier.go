@@ -25,6 +25,7 @@ type Querier interface {
 	DeleteUpstream(ctx context.Context, id uuid.UUID) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
+	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetCountries(ctx context.Context) ([]Country, error)
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
@@ -35,6 +36,7 @@ type Querier interface {
 	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error)
 	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
+	GetWorkerByName(ctx context.Context, name string) (GetWorkerByNameRow, error)
 	InsertPoolUpstreamWeight(ctx context.Context, arg InsertPoolUpstreamWeightParams) ([]PoolUpstreamWeight, error)
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error)
 	InsetPool(ctx context.Context, arg InsetPoolParams) (Pool, error)

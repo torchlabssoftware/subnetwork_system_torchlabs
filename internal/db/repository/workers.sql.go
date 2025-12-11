@@ -7,6 +7,10 @@ package repository
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const createWorker = `-- name: CreateWorker :one
@@ -33,6 +37,115 @@ func (q *Queries) CreateWorker(ctx context.Context, arg CreateWorkerParams) (Wor
 		&i.LastSeen,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAllWorkers = `-- name: GetAllWorkers :many
+SELECT 
+    w.id, 
+    w.name, 
+    w.ip_address, 
+    w.status, 
+    w.last_seen, 
+    w.created_at, 
+    w.updated_at,
+    r.name AS region_name,
+    COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
+FROM worker w
+JOIN region r ON w.region_id = r.id
+LEFT JOIN worker_domains wd ON w.id = wd.worker_id
+GROUP BY w.id, r.name
+`
+
+type GetAllWorkersRow struct {
+	ID         uuid.UUID
+	Name       string
+	IpAddress  string
+	Status     string
+	LastSeen   time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	RegionName string
+	Domains    []string
+}
+
+func (q *Queries) GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllWorkers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllWorkersRow
+	for rows.Next() {
+		var i GetAllWorkersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IpAddress,
+			&i.Status,
+			&i.LastSeen,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.RegionName,
+			pq.Array(&i.Domains),
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWorkerByName = `-- name: GetWorkerByName :one
+SELECT 
+    w.id, 
+    w.name, 
+    w.ip_address, 
+    w.status, 
+    w.last_seen, 
+    w.created_at, 
+    w.updated_at,
+    r.name AS region_name,
+    COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
+FROM worker w
+JOIN region r ON w.region_id = r.id
+LEFT JOIN worker_domains wd ON w.id = wd.worker_id
+WHERE w.name = $1
+GROUP BY w.id, r.name
+`
+
+type GetWorkerByNameRow struct {
+	ID         uuid.UUID
+	Name       string
+	IpAddress  string
+	Status     string
+	LastSeen   time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	RegionName string
+	Domains    []string
+}
+
+func (q *Queries) GetWorkerByName(ctx context.Context, name string) (GetWorkerByNameRow, error) {
+	row := q.db.QueryRowContext(ctx, getWorkerByName, name)
+	var i GetWorkerByNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.IpAddress,
+		&i.Status,
+		&i.LastSeen,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RegionName,
+		pq.Array(&i.Domains),
 	)
 	return i, err
 }

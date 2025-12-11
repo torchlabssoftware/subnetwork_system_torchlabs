@@ -36,6 +36,8 @@ func (ws *WorkerHandler) Routes() http.Handler {
 
 	r.Get("/ws", ws.serveWS)
 	r.Post("/", ws.AddWorker)
+	r.Get("/", ws.GetAllWorkers)
+	r.Get("/{name}", ws.GetWorkerByName)
 	return r
 
 }
@@ -83,8 +85,66 @@ func (ws *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 		LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
 		CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
 		UpdatedAt:  worker.UpdatedAt.Format("2006-01-02T15:04:05.999999Z"),
+		Domains:    []string{},
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, resp)
 
+}
+
+func (ws *WorkerHandler) GetAllWorkers(w http.ResponseWriter, r *http.Request) {
+	workers, err := ws.queries.GetAllWorkers(r.Context())
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get workers", err)
+		return
+	}
+
+	resp := []server.AddWorkerResponse{}
+	for _, worker := range workers {
+		resp = append(resp, server.AddWorkerResponse{
+			ID:         worker.ID.String(),
+			Name:       worker.Name,
+			RegionName: worker.RegionName,
+			IpAddress:  worker.IpAddress,
+			Status:     worker.Status,
+			LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
+			CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
+			UpdatedAt:  worker.UpdatedAt.Format("2006-01-02T15:04:05.999999Z"),
+			Domains:    worker.Domains,
+		})
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, resp)
+}
+
+func (ws *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
+		return
+	}
+
+	worker, err := ws.queries.GetWorkerByName(r.Context(), name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			functions.RespondwithError(w, http.StatusNotFound, "Worker not found", err)
+			return
+		}
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get worker", err)
+		return
+	}
+
+	resp := server.AddWorkerResponse{
+		ID:         worker.ID.String(),
+		Name:       worker.Name,
+		RegionName: worker.RegionName,
+		IpAddress:  worker.IpAddress,
+		Status:     worker.Status,
+		LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
+		CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
+		UpdatedAt:  worker.UpdatedAt.Format("2006-01-02T15:04:05.999999Z"),
+		Domains:    worker.Domains,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, resp)
 }

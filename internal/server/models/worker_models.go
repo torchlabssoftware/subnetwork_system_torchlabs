@@ -7,12 +7,13 @@ type AddWorkerRequest struct {
 }
 
 type AddWorkerResponse struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	RegionName string `json:"region_name"`
-	IpAddress  string `json:"ip_address"`
-	Status     string `json:"status"`
-	LastSeen   string `json:"last_seen"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	RegionName string   `json:"region_name"`
+	IpAddress  string   `json:"ip_address"`
+	Status     string   `json:"status"`
+	LastSeen   string   `json:"last_seen"`
+	CreatedAt  string   `json:"created_at"`
+	UpdatedAt  string   `json:"updated_at"`
+	Domains    []string `json:"domains,omitempty"`
 }
