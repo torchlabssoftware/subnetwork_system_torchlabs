@@ -31,18 +31,15 @@ func NewRouter(pool *sql.DB) http.Handler {
 
 	q := repository.New(pool)
 
-	router.Route("/admin", func(r chi.Router) {
+	router.Route("/api", func(r chi.Router) {
 		h := server.NewUserHandler(q, pool)
 		r.Mount("/users", h.Routes())
 
 		p := server.NewPoolHandler(q, pool)
 		r.Mount("/pools", p.Routes())
-	})
 
-	router.Route("/api", func(r chi.Router) {
 		w := server.NewWorkerHandler(q, pool)
 		r.Mount("/worker", w.Routes())
-
 	})
 
 	return router

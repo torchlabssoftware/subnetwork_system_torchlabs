@@ -86,10 +86,10 @@ type Worker struct {
 	Name      string
 	RegionID  uuid.UUID
 	IpAddress string
-	Status    sql.NullString
-	LastSeen  sql.NullTime
-	CreatedAt sql.NullTime
-	UpdatedAt sql.NullTime
+	Status    string
+	LastSeen  time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type WorkerDomain struct {

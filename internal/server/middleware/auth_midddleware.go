@@ -11,7 +11,7 @@ import (
 
 func AdminAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		adminKey := os.Getenv("API_KEY")
+		adminKey := os.Getenv("ADMIN_API_KEY")
 		if adminKey == "" {
 			functions.RespondwithError(w, http.StatusInternalServerError, "api key not found", fmt.Errorf("api key not found"))
 			return

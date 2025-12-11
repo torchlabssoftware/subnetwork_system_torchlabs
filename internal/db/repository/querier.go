@@ -17,6 +17,7 @@ type Querier interface {
 	AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstream, error)
 	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateWorker(ctx context.Context, arg CreateWorkerParams) (Worker, error)
 	DeleteCountry(ctx context.Context, name string) error
 	DeletePool(ctx context.Context, tag string) error
 	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error
