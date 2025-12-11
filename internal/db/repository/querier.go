@@ -25,6 +25,7 @@ type Querier interface {
 	DeleteUpstream(ctx context.Context, id uuid.UUID) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
+	DeleteWorkerByName(ctx context.Context, name string) error
 	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetCountries(ctx context.Context) ([]Country, error)

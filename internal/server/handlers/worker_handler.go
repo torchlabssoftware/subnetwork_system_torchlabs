@@ -38,6 +38,7 @@ func (ws *WorkerHandler) Routes() http.Handler {
 	r.Post("/", ws.AddWorker)
 	r.Get("/", ws.GetAllWorkers)
 	r.Get("/{name}", ws.GetWorkerByName)
+	r.Delete("/{name}", ws.DeleteWorker)
 	return r
 
 }
@@ -147,4 +148,20 @@ func (ws *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request)
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, resp)
+}
+
+func (ws *WorkerHandler) DeleteWorker(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
+		return
+	}
+
+	err := ws.queries.DeleteWorkerByName(r.Context(), name)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete worker", err)
+		return
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, map[string]string{"message": "Worker deleted successfully"})
 }

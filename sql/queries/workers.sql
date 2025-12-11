@@ -36,3 +36,6 @@ LEFT JOIN worker_domains wd ON w.id = wd.worker_id
 WHERE w.name = $1
 GROUP BY w.id, r.name;
 
+-- name: DeleteWorkerByName :exec
+DELETE FROM worker WHERE name = $1;
+

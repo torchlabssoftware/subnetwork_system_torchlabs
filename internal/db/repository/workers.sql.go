@@ -41,6 +41,15 @@ func (q *Queries) CreateWorker(ctx context.Context, arg CreateWorkerParams) (Wor
 	return i, err
 }
 
+const deleteWorkerByName = `-- name: DeleteWorkerByName :exec
+DELETE FROM worker WHERE name = $1
+`
+
+func (q *Queries) DeleteWorkerByName(ctx context.Context, name string) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkerByName, name)
+	return err
+}
+
 const getAllWorkers = `-- name: GetAllWorkers :many
 SELECT 
     w.id, 
