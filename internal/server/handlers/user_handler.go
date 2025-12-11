@@ -3,7 +3,6 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/mail"
 
@@ -77,21 +76,11 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		email = sql.NullString{Valid: false}
 	}
 
-	//validate datalimit
-	dataLimit := int64(0)
-	if req.DataLimit != nil && *req.DataLimit >= int64(0) {
-		dataLimit = *req.DataLimit
-	} else {
-		functions.RespondwithError(w, http.StatusBadRequest, "send valid data limit", fmt.Errorf("send valid data limit"))
-		return
-	}
-
 	//insert user data
 	createUserParams := repository.CreateUserParams{
-		Email:     email,
-		Username:  uuid.New().String()[:8],
-		Password:  uuid.New().String()[:8],
-		DataLimit: dataLimit,
+		Email:    email,
+		Username: uuid.New().String()[:8],
+		Password: uuid.New().String()[:8],
 	}
 
 	user, err := qtx.CreateUser(r.Context(), createUserParams)
@@ -143,7 +132,6 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		Id:          user.ID,
 		Username:    user.Username,
 		Password:    user.Password,
-		DataLimit:   user.DataLimit,
 		IpWhitelist: ipWhitelist,
 		AllowPools:  addedPools.InsertedTags,
 	}
@@ -173,8 +161,6 @@ func (h *UserHandler) getUserbyId(w http.ResponseWriter, r *http.Request) {
 		Email:       user.Email.String,
 		Username:    user.Username,
 		Password:    user.Password,
-		Data_limit:  user.DataLimit,
-		Data_usage:  user.DataUsage,
 		Status:      user.Status,
 		IpWhitelist: user.IpWhitelist,
 		UserPool:    user.Pools,
@@ -201,8 +187,6 @@ func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 			Email:       user.Email.String,
 			Username:    user.Username,
 			Password:    user.Password,
-			Data_limit:  user.DataLimit,
-			Data_usage:  user.DataUsage,
 			Status:      user.Status,
 			IpWhitelist: user.IpWhitelist,
 			UserPool:    user.Pools,
@@ -242,10 +226,6 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		params.Email = sql.NullString{String: mail.Address, Valid: true}
 	}
 
-	if req.DataLimit != nil {
-		params.DataLimit = sql.NullInt64{Int64: *req.DataLimit, Valid: true}
-	}
-
 	if req.Status != nil && *req.Status != "" {
 		params.Status = sql.NullString{String: *req.Status, Valid: true}
 	}
@@ -259,7 +239,6 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 	resp := server.UpdateUserResponce{
 		Id:        user.ID,
 		Email:     user.Email.String,
-		DataLimit: user.DataLimit,
 		Status:    user.Status,
 		UpdatedAt: user.UpdatedAt,
 	}
@@ -299,15 +278,20 @@ func (h *UserHandler) getDataUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dataUsage, err := h.queries.GetDatausageById(r.Context(), id)
+	dataUsages, err := h.queries.GetDatausageById(r.Context(), id)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return
 	}
 
-	res := server.GetDatausageReponce{
-		DataLimit: dataUsage.DataLimit,
-		DataUsage: dataUsage.DataUsage,
+	res := []server.GetDatausageReponce{}
+
+	for _, dataUsage := range dataUsages {
+		res = append(res, server.GetDatausageReponce{
+			DataLimit: dataUsage.DataLimit,
+			DataUsage: dataUsage.DataUsage,
+			PoolTag:   dataUsage.PoolTag,
+		})
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)
@@ -328,9 +312,19 @@ func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	poolDataStat := []server.PoolDataStat{}
+
+	for i := range userPool.PoolIds {
+		poolDataStat = append(poolDataStat, server.PoolDataStat{
+			Pool:      userPool.PoolIds[i],
+			DataLimit: userPool.DataLimits[i],
+			DataUsage: userPool.DataUsages[i],
+		})
+	}
+
 	resp := server.GetUserPoolResponce{
 		UserId: userPool.ID,
-		Pools:  userPool.Column2,
+		Pools:  poolDataStat,
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, resp)
@@ -352,9 +346,18 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tags := []string{}
+	dataLimits := []int64{}
+
+	for _, pool := range req.UserPool {
+		tags = append(tags, pool.Pool)
+		dataLimits = append(dataLimits, pool.DataLimit)
+	}
+
 	args := repository.AddUserPoolsByPoolTagsParams{
 		UserID:  id,
-		Column2: req.UserPool,
+		Column2: tags,
+		Column3: dataLimits,
 	}
 
 	pool, err := h.queries.AddUserPoolsByPoolTags(r.Context(), args)
@@ -363,9 +366,18 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userPool := []server.PoolDataStat{}
+
+	for i, d := range pool.InsertedDataLimits {
+		userPool = append(userPool, server.PoolDataStat{
+			Pool:      pool.InsertedTags[i],
+			DataLimit: d,
+		})
+	}
+
 	res := server.AddUserPoolResponce{
 		UserId:   id,
-		UserPool: pool.InsertedTags,
+		UserPool: userPool,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)

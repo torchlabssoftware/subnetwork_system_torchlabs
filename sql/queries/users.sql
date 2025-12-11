@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO "user"(email,username,password,data_limit)
-VALUES ($1,$2,$3,$4)
+INSERT INTO "user"(email,username,password)
+VALUES ($1,$2,$3)
 RETURNING *;
 
 -- name: InsertUserIpwhitelist :many
@@ -13,10 +13,8 @@ SELECT
     u.id,
     u.username,
     u.password,
-    u.data_usage,
     u.email,
     u.status,
-    u.data_limit,
     u.created_at,
     u.updated_at,
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
@@ -33,10 +31,8 @@ SELECT
     u.id,
     u.username,
     u.password,
-    u.data_usage,
     u.email,
     u.status,
-    u.data_limit,
     u.created_at,
     u.updated_at,
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
@@ -50,8 +46,7 @@ GROUP BY u.id;
 -- name: UpdateUser :one
 UPDATE "user" 
 SET 
-email = COALESCE(sqlc.narg('email'),email), 
-data_limit = COALESCE(sqlc.narg('data_limit'),data_limit), 
+email = COALESCE(sqlc.narg('email'),email),  
 status = COALESCE(sqlc.narg('status'),status),
 updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
@@ -64,12 +59,18 @@ status = 'deleted',
 updated_at = CURRENT_TIMESTAMP
 WHERE id = $1;
 
--- name: GetDatausageById :one
-SELECT u.data_limit,u.data_usage FROM "user" as u
-WHERE u.id = $1;
+-- name: GetDatausageById :many
+SELECT up.data_limit,up.data_usage,p.tag AS pool_tag 
+FROM user_pools AS up 
+INNER JOIN pool AS p ON up.pool_id = p.id
+WHERE up.user_id = $1;
 
 -- name: GetUserPoolsByUserId :one
-select u.id,COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] from  "user" as u
+select u.id,
+    COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] as pool_ids,
+    COALESCE(ARRAY_AGG(up.data_limit) FILTER (WHERE up.data_limit IS NOT NULL),'{}')::BIGINT[] AS data_limits,
+    COALESCE(ARRAY_AGG(up.data_usage) FILTER (WHERE up.data_usage IS NOT NULL),'{}')::BIGINT[]  AS data_usages
+from  "user" as u
 join user_pools as up
 on u.id = up.user_id
 WHERE u.id = $1
@@ -82,14 +83,15 @@ WITH matching_pools AS (
     WHERE tag = ANY($2::text[])
 ), 
 inserted_rows AS (
-    INSERT INTO user_pools (user_id, pool_id)
-    SELECT $1, id FROM matching_pools
+    INSERT INTO user_pools (user_id, pool_id,data_limit)
+    SELECT $1, id,UNNEST($3::BIGINT[]) FROM matching_pools
     ON CONFLICT (user_id, pool_id) DO NOTHING
-    RETURNING pool_id, user_id
+    RETURNING pool_id, user_id,data_limit
 )
 SELECT 
     i.user_id, 
-    ARRAY_AGG(p.tag)::TEXT[] AS inserted_tags
+    ARRAY_AGG(p.tag)::TEXT[] AS inserted_tags,
+    ARRAY_AGG(i.data_limit)::BIGINT[] AS inserted_data_limits
 FROM inserted_rows i
 JOIN matching_pools p ON i.pool_id = p.id
 GROUP BY i.user_id;

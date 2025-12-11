@@ -21,14 +21,15 @@ WITH matching_pools AS (
     WHERE tag = ANY($2::text[])
 ), 
 inserted_rows AS (
-    INSERT INTO user_pools (user_id, pool_id)
-    SELECT $1, id FROM matching_pools
+    INSERT INTO user_pools (user_id, pool_id,data_limit)
+    SELECT $1, id,UNNEST($3::BIGINT[]) FROM matching_pools
     ON CONFLICT (user_id, pool_id) DO NOTHING
-    RETURNING pool_id, user_id
+    RETURNING pool_id, user_id,data_limit
 )
 SELECT 
     i.user_id, 
-    ARRAY_AGG(p.tag)::TEXT[] AS inserted_tags
+    ARRAY_AGG(p.tag)::TEXT[] AS inserted_tags,
+    ARRAY_AGG(i.data_limit)::BIGINT[] AS inserted_data_limits
 FROM inserted_rows i
 JOIN matching_pools p ON i.pool_id = p.id
 GROUP BY i.user_id
@@ -37,48 +38,42 @@ GROUP BY i.user_id
 type AddUserPoolsByPoolTagsParams struct {
 	UserID  uuid.UUID
 	Column2 []string
+	Column3 []int64
 }
 
 type AddUserPoolsByPoolTagsRow struct {
-	UserID       uuid.UUID
-	InsertedTags []string
+	UserID             uuid.UUID
+	InsertedTags       []string
+	InsertedDataLimits []int64
 }
 
 func (q *Queries) AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error) {
-	row := q.db.QueryRowContext(ctx, addUserPoolsByPoolTags, arg.UserID, pq.Array(arg.Column2))
+	row := q.db.QueryRowContext(ctx, addUserPoolsByPoolTags, arg.UserID, pq.Array(arg.Column2), pq.Array(arg.Column3))
 	var i AddUserPoolsByPoolTagsRow
-	err := row.Scan(&i.UserID, pq.Array(&i.InsertedTags))
+	err := row.Scan(&i.UserID, pq.Array(&i.InsertedTags), pq.Array(&i.InsertedDataLimits))
 	return i, err
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO "user"(email,username,password,data_limit)
-VALUES ($1,$2,$3,$4)
-RETURNING id, email, username, password, data_limit, data_usage, status, created_at, updated_at
+INSERT INTO "user"(email,username,password)
+VALUES ($1,$2,$3)
+RETURNING id, email, username, password, status, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	Email     sql.NullString
-	Username  string
-	Password  string
-	DataLimit int64
+	Email    sql.NullString
+	Username string
+	Password string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser,
-		arg.Email,
-		arg.Username,
-		arg.Password,
-		arg.DataLimit,
-	)
+	row := q.db.QueryRowContext(ctx, createUser, arg.Email, arg.Username, arg.Password)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Username,
 		&i.Password,
-		&i.DataLimit,
-		&i.DataUsage,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -127,10 +122,8 @@ SELECT
     u.id,
     u.username,
     u.password,
-    u.data_usage,
     u.email,
     u.status,
-    u.data_limit,
     u.created_at,
     u.updated_at,
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
@@ -146,10 +139,8 @@ type GetAllusersRow struct {
 	ID          uuid.UUID
 	Username    string
 	Password    string
-	DataUsage   int64
 	Email       sql.NullString
 	Status      string
-	DataLimit   int64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	IpWhitelist []string
@@ -169,10 +160,8 @@ func (q *Queries) GetAllusers(ctx context.Context) ([]GetAllusersRow, error) {
 			&i.ID,
 			&i.Username,
 			&i.Password,
-			&i.DataUsage,
 			&i.Email,
 			&i.Status,
-			&i.DataLimit,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			pq.Array(&i.IpWhitelist),
@@ -191,25 +180,44 @@ func (q *Queries) GetAllusers(ctx context.Context) ([]GetAllusersRow, error) {
 	return items, nil
 }
 
-const getDatausageById = `-- name: GetDatausageById :one
-SELECT u.data_limit,u.data_usage FROM "user" as u
-WHERE u.id = $1
+const getDatausageById = `-- name: GetDatausageById :many
+SELECT up.data_limit,up.data_usage,p.tag AS pool_tag 
+FROM user_pools AS up 
+INNER JOIN pool AS p ON up.pool_id = p.id
+WHERE up.user_id = $1
 `
 
 type GetDatausageByIdRow struct {
 	DataLimit int64
 	DataUsage int64
+	PoolTag   string
 }
 
-func (q *Queries) GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error) {
-	row := q.db.QueryRowContext(ctx, getDatausageById, id)
-	var i GetDatausageByIdRow
-	err := row.Scan(&i.DataLimit, &i.DataUsage)
-	return i, err
+func (q *Queries) GetDatausageById(ctx context.Context, userID uuid.UUID) ([]GetDatausageByIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, getDatausageById, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDatausageByIdRow
+	for rows.Next() {
+		var i GetDatausageByIdRow
+		if err := rows.Scan(&i.DataLimit, &i.DataUsage, &i.PoolTag); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, email, username, password, data_limit, data_usage, status, created_at, updated_at
+SELECT id, email, username, password, status, created_at, updated_at
 FROM "user"
 WHERE username = $1
 `
@@ -222,8 +230,6 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Email,
 		&i.Username,
 		&i.Password,
-		&i.DataLimit,
-		&i.DataUsage,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -258,7 +264,11 @@ func (q *Queries) GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) 
 }
 
 const getUserPoolsByUserId = `-- name: GetUserPoolsByUserId :one
-select u.id,COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] from  "user" as u
+select u.id,
+    COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] as pool_ids,
+    COALESCE(ARRAY_AGG(up.data_limit) FILTER (WHERE up.data_limit IS NOT NULL),'{}')::BIGINT[] AS data_limits,
+    COALESCE(ARRAY_AGG(up.data_usage) FILTER (WHERE up.data_usage IS NOT NULL),'{}')::BIGINT[]  AS data_usages
+from  "user" as u
 join user_pools as up
 on u.id = up.user_id
 WHERE u.id = $1
@@ -266,14 +276,21 @@ group by u.id
 `
 
 type GetUserPoolsByUserIdRow struct {
-	ID      uuid.UUID
-	Column2 []string
+	ID         uuid.UUID
+	PoolIds    []string
+	DataLimits []int64
+	DataUsages []int64
 }
 
 func (q *Queries) GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserPoolsByUserId, id)
 	var i GetUserPoolsByUserIdRow
-	err := row.Scan(&i.ID, pq.Array(&i.Column2))
+	err := row.Scan(
+		&i.ID,
+		pq.Array(&i.PoolIds),
+		pq.Array(&i.DataLimits),
+		pq.Array(&i.DataUsages),
+	)
 	return i, err
 }
 
@@ -282,10 +299,8 @@ SELECT
     u.id,
     u.username,
     u.password,
-    u.data_usage,
     u.email,
     u.status,
-    u.data_limit,
     u.created_at,
     u.updated_at,
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
@@ -302,10 +317,8 @@ type GetUserbyIdRow struct {
 	ID          uuid.UUID
 	Username    string
 	Password    string
-	DataUsage   int64
 	Email       sql.NullString
 	Status      string
-	DataLimit   int64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	IpWhitelist []string
@@ -319,10 +332,8 @@ func (q *Queries) GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow
 		&i.ID,
 		&i.Username,
 		&i.Password,
-		&i.DataUsage,
 		&i.Email,
 		&i.Status,
-		&i.DataLimit,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		pq.Array(&i.IpWhitelist),
@@ -386,36 +397,27 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
 const updateUser = `-- name: UpdateUser :one
 UPDATE "user" 
 SET 
-email = COALESCE($2,email), 
-data_limit = COALESCE($3,data_limit), 
-status = COALESCE($4,status),
+email = COALESCE($2,email),  
+status = COALESCE($3,status),
 updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, email, username, password, data_limit, data_usage, status, created_at, updated_at
+RETURNING id, email, username, password, status, created_at, updated_at
 `
 
 type UpdateUserParams struct {
-	ID        uuid.UUID
-	Email     sql.NullString
-	DataLimit sql.NullInt64
-	Status    sql.NullString
+	ID     uuid.UUID
+	Email  sql.NullString
+	Status sql.NullString
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, updateUser,
-		arg.ID,
-		arg.Email,
-		arg.DataLimit,
-		arg.Status,
-	)
+	row := q.db.QueryRowContext(ctx, updateUser, arg.ID, arg.Email, arg.Status)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Username,
 		&i.Password,
-		&i.DataLimit,
-		&i.DataUsage,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,

@@ -24,8 +24,6 @@ CREATE TABLE "user" (
     email TEXT UNIQUE,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    data_limit BIGINT NOT NULL DEFAULT 0,
-    data_usage BIGINT NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'deleted')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -54,6 +52,8 @@ CREATE TABLE user_pools (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     pool_id UUID NOT NULL REFERENCES pool(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    data_limit BIGINT NOT NULL DEFAULT 0,
+    data_usage BIGINT NOT NULL DEFAULT 0,
     UNIQUE(pool_id, user_id)
 );
 

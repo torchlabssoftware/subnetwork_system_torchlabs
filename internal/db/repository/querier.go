@@ -31,7 +31,7 @@ type Querier interface {
 	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetCountries(ctx context.Context) ([]Country, error)
-	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
+	GetDatausageById(ctx context.Context, userID uuid.UUID) ([]GetDatausageByIdRow, error)
 	GetPoolByTagWithUpstreams(ctx context.Context, tag string) ([]GetPoolByTagWithUpstreamsRow, error)
 	GetRegions(ctx context.Context) ([]Region, error)
 	GetUpstreams(ctx context.Context) ([]Upstream, error)

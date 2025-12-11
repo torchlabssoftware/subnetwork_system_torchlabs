@@ -61,8 +61,6 @@ type User struct {
 	Email     sql.NullString
 	Username  string
 	Password  string
-	DataLimit int64
-	DataUsage int64
 	Status    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -76,9 +74,11 @@ type UserIpWhitelist struct {
 }
 
 type UserPool struct {
-	ID     uuid.UUID
-	PoolID uuid.UUID
-	UserID uuid.UUID
+	ID        uuid.UUID
+	PoolID    uuid.UUID
+	UserID    uuid.UUID
+	DataLimit int64
+	DataUsage int64
 }
 
 type Worker struct {
