@@ -3,6 +3,8 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"net/mail"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
+	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
 	server "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
@@ -27,6 +30,9 @@ func NewUserHandler(q *repository.Queries, db *sql.DB) *UserHandler {
 
 func (h *UserHandler) Routes() http.Handler {
 	r := chi.NewRouter()
+
+	r.Use(middleware.AdminAuthentication)
+
 	r.Post("/", h.createUser)
 	r.Get("/", h.getUsers)
 	r.Get("/{id}", h.getUserbyId)
@@ -39,6 +45,9 @@ func (h *UserHandler) Routes() http.Handler {
 	r.Get("/{id}/ipwhitelist", h.getUserIpWhitelist)
 	r.Post("/{id}/ipwhitelist", h.addUserIpWhitelist)
 	r.Delete("/{id}/ipwhitelist", h.removeUserIpWhitelist)
+
+	r.Post("/generate", h.GenerateproxyString)
+
 	return r
 }
 
@@ -65,7 +74,7 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 
 	//validate email
 	var email sql.NullString
-	if req.Email != nil && *req.Email != "" {
+	if req.Email != nil || *req.Email != "" {
 		mail, err := mail.ParseAddress(*req.Email)
 		if err != nil {
 			functions.RespondwithError(w, http.StatusBadRequest, "invalid email", err)
@@ -89,15 +98,26 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("uid: ", user.ID)
+
 	//insert allow_pool data
-	var allowPools []string
-	if req.AllowPools != nil && len(*req.AllowPools) > 0 {
+	var allowPools []server.PoolDataStat
+	if req.AllowPools != nil || len(*req.AllowPools) > 0 {
 		allowPools = *req.AllowPools
+	}
+
+	pools := []string{}
+	dataLimit := []int64{}
+
+	for _, pool := range allowPools {
+		pools = append(pools, pool.Pool)
+		dataLimit = append(dataLimit, pool.DataLimit)
 	}
 
 	poolArgs := repository.AddUserPoolsByPoolTagsParams{
 		UserID:  user.ID,
-		Column2: allowPools,
+		Column2: pools,
+		Column3: dataLimit,
 	}
 
 	addedPools, err := qtx.AddUserPoolsByPoolTags(r.Context(), poolArgs)
@@ -106,9 +126,11 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("addedPools: ", len(addedPools.InsertedTags))
+
 	//insert ipwhilist data
 	var ipWhitelist []string
-	if req.IpWhiteList != nil && len(*req.IpWhiteList) > 0 {
+	if req.IpWhiteList != nil || len(*req.IpWhiteList) > 0 {
 		ipWhitelist = *req.IpWhiteList
 	}
 
@@ -117,11 +139,13 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		Column2: ipWhitelist,
 	}
 
-	_, err = qtx.InsertUserIpwhitelist(r.Context(), userIpWhitelistParams)
+	ip, err := qtx.InsertUserIpwhitelist(r.Context(), userIpWhitelistParams)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
 		return
 	}
+
+	log.Println(len(ip))
 
 	if err := ctx.Commit(); err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
@@ -497,4 +521,77 @@ func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Reque
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, nil)
+}
+
+func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request) {
+	var req server.GenerateproxyStringRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	if req.UserId == nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("user id is required"))
+		return
+	}
+	if req.Amount == nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("amount is required"))
+		return
+	}
+	if req.IsSticky == nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("sticky is required"))
+		return
+	}
+	if req.CountryCode == nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("country code is required"))
+		return
+	}
+	if req.PoolGroup == nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("pool group is required"))
+		return
+	}
+	if req.ProxyType == nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("proxy type is required"))
+		return
+	}
+	if req.Format == nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("format is required"))
+		return
+	}
+
+	tag := *req.PoolGroup + *req.ProxyType + "%"
+
+	data, err := h.queries.GenerateproxyString(r.Context(), repository.GenerateproxyStringParams{
+		Code:   *req.CountryCode,
+		Tag:    tag,
+		UserID: *req.UserId,
+	})
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	userName := data.Username
+	password := data.Password
+	subdomain := data.Subdomain
+	port := data.Port
+
+	res := []string{}
+
+	for i := 0; i < *req.Amount; i++ {
+		config := functions.GenerateproxyString(*req.PoolGroup, *req.CountryCode, *req.IsSticky)
+		switch *req.Format {
+		case "ip:port:user:pass":
+			proxyString := fmt.Sprintf("%s"+"upstream-y.com"+":%d:%s:%s%s", subdomain, port, userName, password, config)
+			res = append(res, proxyString)
+		case "user:pass:ip:port":
+			proxyString := fmt.Sprintf("%s:%s%s:%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
+			res = append(res, proxyString)
+		case "user:pass@ip:port":
+			proxyString := fmt.Sprintf("%s:%s%s@%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
+			res = append(res, proxyString)
+		}
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
 }

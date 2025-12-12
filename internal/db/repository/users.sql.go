@@ -117,6 +117,42 @@ func (q *Queries) DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPools
 	return err
 }
 
+const generateproxyString = `-- name: GenerateproxyString :one
+SELECT p.tag,p.subdomain,p.port,u.username,u.password FROM pool as p
+join region as r on p.region_id = r.id
+join country as c on r.id = c.region_id
+join user_pools as up on p.id = up.pool_id
+join "user" as u on up.user_id = u.id
+where c.code = $1 AND p.tag LIKE $2 AND up.user_id = $3
+`
+
+type GenerateproxyStringParams struct {
+	Code   string
+	Tag    string
+	UserID uuid.UUID
+}
+
+type GenerateproxyStringRow struct {
+	Tag       string
+	Subdomain string
+	Port      int32
+	Username  string
+	Password  string
+}
+
+func (q *Queries) GenerateproxyString(ctx context.Context, arg GenerateproxyStringParams) (GenerateproxyStringRow, error) {
+	row := q.db.QueryRowContext(ctx, generateproxyString, arg.Code, arg.Tag, arg.UserID)
+	var i GenerateproxyStringRow
+	err := row.Scan(
+		&i.Tag,
+		&i.Subdomain,
+		&i.Port,
+		&i.Username,
+		&i.Password,
+	)
+	return i, err
+}
+
 const getAllusers = `-- name: GetAllusers :many
 SELECT 
     u.id,

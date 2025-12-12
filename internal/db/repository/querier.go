@@ -28,6 +28,7 @@ type Querier interface {
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
 	DeleteWorkerByName(ctx context.Context, name string) error
 	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error
+	GenerateproxyString(ctx context.Context, arg GenerateproxyStringParams) (GenerateproxyStringRow, error)
 	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetCountries(ctx context.Context) ([]Country, error)

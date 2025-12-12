@@ -128,6 +128,15 @@ SELECT *
 FROM "user"
 WHERE username = $1;
 
+-- name: GenerateproxyString :one
+SELECT p.tag,p.subdomain,p.port,u.username,u.password FROM pool as p
+join region as r on p.region_id = r.id
+join country as c on r.id = c.region_id
+join user_pools as up on p.id = up.pool_id
+join "user" as u on up.user_id = u.id
+where c.code = $1 AND p.tag LIKE $2 AND up.user_id = $3 ;
+
+
 
 
 

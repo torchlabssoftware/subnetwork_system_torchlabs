@@ -7,9 +7,9 @@ import (
 )
 
 type CreateUserRequest struct {
-	Email       *string   `json:"email"`
-	AllowPools  *[]string `json:"allow_pools"`
-	IpWhiteList *[]string `json:"ip_whitelist"`
+	Email       *string         `json:"email"`
+	AllowPools  *[]PoolDataStat `json:"allow_pools"`
+	IpWhiteList *[]string       `json:"ip_whitelist"`
 }
 
 type CreateUserResponce struct {
@@ -90,4 +90,14 @@ type AddUserIpwhitelistResponce struct {
 
 type DeleteUserIpwhitelistRequest struct {
 	IpCidr []string `json:"ip_cidr"`
+}
+
+type GenerateproxyStringRequest struct {
+	UserId      *uuid.UUID `json:"user_id"`
+	CountryCode *string    `json:"country_code"`
+	PoolGroup   *string    `json:"pool_group"`
+	ProxyType   *string    `json:"proxy_type"`
+	IsSticky    *bool      `json:"is_sticky"`
+	Amount      *int       `json:"amount"`
+	Format      *string    `json:"format"`
 }
