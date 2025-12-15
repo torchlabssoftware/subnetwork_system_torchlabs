@@ -34,7 +34,7 @@ func (q *Queries) AddWorkerDomain(ctx context.Context, arg AddWorkerDomainParams
 const createWorker = `-- name: CreateWorker :one
 INSERT INTO worker (name, region_id, ip_address)
 VALUES ($1,(SELECT id from region where region.name = $2), $3)
-RETURNING id, name, region_id, ip_address, status, last_seen, created_at, updated_at
+RETURNING id, name, region_id, ip_address, port, status, pool_id, last_seen, created_at
 `
 
 type CreateWorkerParams struct {
@@ -51,10 +51,11 @@ func (q *Queries) CreateWorker(ctx context.Context, arg CreateWorkerParams) (Wor
 		&i.Name,
 		&i.RegionID,
 		&i.IpAddress,
+		&i.Port,
 		&i.Status,
+		&i.PoolID,
 		&i.LastSeen,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -91,7 +92,6 @@ SELECT
     w.status, 
     w.last_seen, 
     w.created_at, 
-    w.updated_at,
     r.name AS region_name,
     COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
 FROM worker w
@@ -107,7 +107,6 @@ type GetAllWorkersRow struct {
 	Status     string
 	LastSeen   time.Time
 	CreatedAt  time.Time
-	UpdatedAt  time.Time
 	RegionName string
 	Domains    []string
 }
@@ -128,7 +127,6 @@ func (q *Queries) GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 			&i.Status,
 			&i.LastSeen,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.RegionName,
 			pq.Array(&i.Domains),
 		); err != nil {
@@ -153,7 +151,6 @@ SELECT
     w.status, 
     w.last_seen, 
     w.created_at, 
-    w.updated_at,
     r.name AS region_name,
     COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
 FROM worker w
@@ -170,7 +167,6 @@ type GetWorkerByNameRow struct {
 	Status     string
 	LastSeen   time.Time
 	CreatedAt  time.Time
-	UpdatedAt  time.Time
 	RegionName string
 	Domains    []string
 }
@@ -185,7 +181,6 @@ func (q *Queries) GetWorkerByName(ctx context.Context, name string) (GetWorkerBy
 		&i.Status,
 		&i.LastSeen,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.RegionName,
 		pq.Array(&i.Domains),
 	)

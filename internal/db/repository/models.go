@@ -5,7 +5,6 @@
 package repository
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,12 +16,10 @@ type Country struct {
 	Code      string
 	RegionID  uuid.UUID
 	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type Pool struct {
 	ID        uuid.UUID
-	Name      string
 	Tag       string
 	RegionID  uuid.UUID
 	Subdomain string
@@ -42,7 +39,6 @@ type Region struct {
 	ID        uuid.UUID
 	Name      string
 	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type Upstream struct {
@@ -53,12 +49,10 @@ type Upstream struct {
 	Port             int32
 	Domain           string
 	CreatedAt        time.Time
-	UpdatedAt        time.Time
 }
 
 type User struct {
 	ID        uuid.UUID
-	Email     sql.NullString
 	Username  string
 	Password  string
 	Status    string
@@ -86,10 +80,11 @@ type Worker struct {
 	Name      string
 	RegionID  uuid.UUID
 	IpAddress string
+	Port      int32
 	Status    string
+	PoolID    uuid.UUID
 	LastSeen  time.Time
 	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type WorkerDomain struct {

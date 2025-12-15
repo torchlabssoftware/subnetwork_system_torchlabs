@@ -7,7 +7,6 @@ import (
 )
 
 type CreateUserRequest struct {
-	Email       *string         `json:"email"`
 	AllowPools  *[]PoolDataStat `json:"allow_pools"`
 	IpWhiteList *[]string       `json:"ip_whitelist"`
 }
@@ -22,7 +21,6 @@ type CreateUserResponce struct {
 
 type GetUserByIdResponce struct {
 	Id          uuid.UUID `json:"id,omitempty"`
-	Email       string    `json:"email,omitempty"`
 	Username    string    `json:"username,omitempty"`
 	Password    string    `json:"password,omitempty"`
 	Status      string    `json:"status,omitempty"`
@@ -33,13 +31,11 @@ type GetUserByIdResponce struct {
 }
 
 type UpdateUserRequest struct {
-	Email  *string `json:"email"`
 	Status *string `json:"status"`
 }
 
 type UpdateUserResponce struct {
 	Id        uuid.UUID `json:"id,omitempty"`
-	Email     string    `json:"email,omitempty"`
 	Status    string    `json:"status,omitempty"`
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }

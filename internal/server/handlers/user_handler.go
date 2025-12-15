@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/mail"
 
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
@@ -72,22 +71,8 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//validate email
-	var email sql.NullString
-	if req.Email != nil || *req.Email != "" {
-		mail, err := mail.ParseAddress(*req.Email)
-		if err != nil {
-			functions.RespondwithError(w, http.StatusBadRequest, "invalid email", err)
-			return
-		}
-		email = sql.NullString{String: mail.Address, Valid: true}
-	} else {
-		email = sql.NullString{Valid: false}
-	}
-
 	//insert user data
 	createUserParams := repository.CreateUserParams{
-		Email:    email,
 		Username: uuid.New().String()[:8],
 		Password: uuid.New().String()[:8],
 	}
@@ -182,7 +167,6 @@ func (h *UserHandler) getUserbyId(w http.ResponseWriter, r *http.Request) {
 
 	resp := server.GetUserByIdResponce{
 		Id:          user.ID,
-		Email:       user.Email.String,
 		Username:    user.Username,
 		Password:    user.Password,
 		Status:      user.Status,
@@ -208,7 +192,6 @@ func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 	for _, user := range users {
 		resp = append(resp, server.GetUserByIdResponce{
 			Id:          user.ID,
-			Email:       user.Email.String,
 			Username:    user.Username,
 			Password:    user.Password,
 			Status:      user.Status,
@@ -241,15 +224,6 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		ID: id,
 	}
 
-	if req.Email != nil {
-		mail, err := mail.ParseAddress(*req.Email)
-		if err != nil {
-			functions.RespondwithError(w, http.StatusBadRequest, "enter correct email", err)
-			return
-		}
-		params.Email = sql.NullString{String: mail.Address, Valid: true}
-	}
-
 	if req.Status != nil && *req.Status != "" {
 		params.Status = sql.NullString{String: *req.Status, Valid: true}
 	}
@@ -262,7 +236,6 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 
 	resp := server.UpdateUserResponce{
 		Id:        user.ID,
-		Email:     user.Email.String,
 		Status:    user.Status,
 		UpdatedAt: user.UpdatedAt,
 	}
