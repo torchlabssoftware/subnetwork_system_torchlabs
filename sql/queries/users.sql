@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO "user"(email,username,password)
-VALUES ($1,$2,$3)
+INSERT INTO "user"(username,password)
+VALUES ($1,$2)
 RETURNING *;
 
 -- name: InsertUserIpwhitelist :many
@@ -13,12 +13,11 @@ SELECT
     u.id,
     u.username,
     u.password,
-    u.email,
     u.status,
     u.created_at,
     u.updated_at,
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
-    COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
+    COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL), '{}')::text[] AS pools
 FROM "user" AS u
 LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
 LEFT JOIN user_pools AS up ON u.id = up.user_id
@@ -31,12 +30,11 @@ SELECT
     u.id,
     u.username,
     u.password,
-    u.email,
     u.status,
     u.created_at,
     u.updated_at,
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
-    COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
+    COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL), '{}')::text[] AS pools
 FROM "user" AS u
 LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
 LEFT JOIN user_pools AS up ON u.id = up.user_id
@@ -46,7 +44,6 @@ GROUP BY u.id;
 -- name: UpdateUser :one
 UPDATE "user" 
 SET 
-email = COALESCE(sqlc.narg('email'),email),  
 status = COALESCE(sqlc.narg('status'),status),
 updated_at = CURRENT_TIMESTAMP
 WHERE id = $1

@@ -35,8 +35,8 @@ DELETE FROM upstream as u
 where u.id = $1;
 
 -- name: InsetPool :one
-INSERT INTO pool(name,tag,region_id,subdomain,port)
-VALUES($1,$2,$3,$4,$5)
+INSERT INTO pool(tag,region_id,subdomain,port)
+VALUES($1,$2,$3,$4)
 RETURNING *;
 
 -- name: InsertPoolUpstreamWeight :many
@@ -48,7 +48,6 @@ RETURNING *;
 -- name: ListPoolsWithUpstreams :many
 SELECT 
     p.id AS pool_id,
-    p.name AS pool_name,
     p.tag AS pool_tag,
     p.subdomain AS pool_subdomain,
     p.port AS pool_port,
@@ -63,7 +62,6 @@ LEFT JOIN upstream u ON puw.upstream_id = u.id;
 -- name: GetPoolByTagWithUpstreams :many
 SELECT 
     p.id AS pool_id,
-    p.name AS pool_name,
     p.tag AS pool_tag,
     p.subdomain AS pool_subdomain,
     p.port AS pool_port,
@@ -79,7 +77,6 @@ WHERE p.tag = $1;
 -- name: UpdatePool :one
 UPDATE pool
 SET 
-    name = COALESCE(sqlc.narg('name'), name),
     region_id = COALESCE(sqlc.narg('region_id'), region_id),
     subdomain = COALESCE(sqlc.narg('subdomain'), subdomain),
     port = COALESCE(sqlc.narg('port'), port),

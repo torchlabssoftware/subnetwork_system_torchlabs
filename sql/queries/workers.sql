@@ -11,7 +11,6 @@ SELECT
     w.status, 
     w.last_seen, 
     w.created_at, 
-    w.updated_at,
     r.name AS region_name,
     COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
 FROM worker w
@@ -27,7 +26,6 @@ SELECT
     w.status, 
     w.last_seen, 
     w.created_at, 
-    w.updated_at,
     r.name AS region_name,
     COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
 FROM worker w

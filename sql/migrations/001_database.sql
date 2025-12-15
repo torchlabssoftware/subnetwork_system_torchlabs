@@ -6,8 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE region (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE country (
@@ -15,13 +14,11 @@ CREATE TABLE country (
     name TEXT NOT NULL,
     code TEXT NOT NULL UNIQUE,
     region_id UUID NOT NULL REFERENCES region(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE "user" (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT UNIQUE,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'deleted')),
@@ -39,7 +36,6 @@ CREATE TABLE user_ip_whitelist (
 
 CREATE TABLE pool (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL ,
     tag TEXT NOT NULL UNIQUE,
     region_id UUID NOT NULL REFERENCES region(id) ON DELETE SET NULL,
     subdomain TEXT NOT NULL,
@@ -64,8 +60,7 @@ CREATE TABLE upstream (
     format TEXT NOT NULL,
     port INT NOT NULL,
     domain TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE pool_upstream_weight (
@@ -81,10 +76,11 @@ CREATE TABLE worker (
     name TEXT NOT NULL UNIQUE,
     region_id UUID NOT NULL REFERENCES region(id) ON DELETE CASCADE,
     ip_address TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
+    port INT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'deleted')),
+    pool_id UUID NOT NULL REFERENCES pool(id) ON DELETE CASCADE, 
     last_seen TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE worker_domains (
