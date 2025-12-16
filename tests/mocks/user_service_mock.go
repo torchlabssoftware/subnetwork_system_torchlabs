@@ -56,3 +56,13 @@ func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) (int, st
 	args := m.Called(ctx, id)
 	return args.Int(0), args.String(1), args.Error(2)
 }
+
+func (m *MockUserService) GetDataUsage(ctx context.Context, id uuid.UUID) ([]models.GetDatausageReponce, int, string, error) {
+	args := m.Called(ctx, id)
+
+	var resp []models.GetDatausageReponce
+	if args.Get(0) != nil {
+		resp = args.Get(0).([]models.GetDatausageReponce)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}

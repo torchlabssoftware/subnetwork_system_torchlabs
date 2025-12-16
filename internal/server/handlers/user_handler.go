@@ -174,23 +174,13 @@ func (h *UserHandler) getDataUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dataUsages, err := h.queries.GetDatausageById(r.Context(), id)
+	response, code, message, err := h.service.GetDataUsage(r.Context(), id)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	res := []models.GetDatausageReponce{}
-
-	for _, dataUsage := range dataUsages {
-		res = append(res, models.GetDatausageReponce{
-			DataLimit: dataUsage.DataLimit,
-			DataUsage: dataUsage.DataUsage,
-			PoolTag:   dataUsage.PoolTag,
-		})
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, res)
+	functions.RespondwithJSON(w, http.StatusOK, response)
 }
 
 func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) {

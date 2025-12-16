@@ -16,6 +16,7 @@ type UserService interface {
 	GetUsers(ctx context.Context) (response []models.GetUserByIdResponce, code int, message string, err error)
 	UpdateUserStatus(ctx context.Context, id uuid.UUID, req *models.UpdateUserRequest) (response *models.UpdateUserResponce, code int, message string, err error)
 	DeleteUser(ctx context.Context, id uuid.UUID) (code int, message string, err error)
+	GetDataUsage(ctx context.Context, id uuid.UUID) (response []models.GetDatausageReponce, code int, message string, err error)
 }
 
 type userService struct {
@@ -187,4 +188,22 @@ func (u *userService) DeleteUser(ctx context.Context, id uuid.UUID) (code int, m
 		return http.StatusInternalServerError, "server error", err
 	}
 	return http.StatusOK, "user deleted", nil
+}
+
+func (u *userService) GetDataUsage(ctx context.Context, id uuid.UUID) (response []models.GetDatausageReponce, code int, message string, err error) {
+	dataUsages, err := u.queries.GetDatausageById(ctx, id)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "server error", err
+	}
+
+	response = []models.GetDatausageReponce{}
+	for _, dataUsage := range dataUsages {
+		response = append(response, models.GetDatausageReponce{
+			DataLimit: dataUsage.DataLimit,
+			DataUsage: dataUsage.DataUsage,
+			PoolTag:   dataUsage.PoolTag,
+		})
+	}
+
+	return response, http.StatusOK, "", nil
 }
