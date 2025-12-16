@@ -9,7 +9,8 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
-	server "github.com/torchlabssoftware/subnetwork_system/internal/server/handlers"
+	handlers "github.com/torchlabssoftware/subnetwork_system/internal/server/handlers"
+	service "github.com/torchlabssoftware/subnetwork_system/internal/server/service"
 )
 
 func NewRouter(pool *sql.DB) http.Handler {
@@ -30,12 +31,12 @@ func NewRouter(pool *sql.DB) http.Handler {
 	}))
 
 	q := repository.New(pool)
-	w := server.NewWorkerHandler(q, pool)
-	h := server.NewUserHandler(q, pool)
-	p := server.NewPoolHandler(q, pool)
+	u := handlers.NewUserHandler(q, pool, service.NewUserService(q, pool))
+	w := handlers.NewWorkerHandler(q, pool)
+	p := handlers.NewPoolHandler(q, pool)
 
 	router.Route("/admin", func(r chi.Router) {
-		r.Mount("/users", h.AdminRoutes())
+		r.Mount("/users", u.AdminRoutes())
 		r.Mount("/pools", p.AdminRoutes())
 		r.Mount("/worker", w.AdminRoutes())
 	})

@@ -3,10 +3,13 @@ INSERT INTO "user"(username,password)
 VALUES ($1,$2)
 RETURNING *;
 
--- name: InsertUserIpwhitelist :many
-INSERT INTO user_ip_whitelist(user_id,ip_cidr)
-SELECT $1, UNNEST($2::text[])
-RETURNING *;
+-- name: InsertUserIpwhitelist :one
+WITH inserted AS (
+    INSERT INTO user_ip_whitelist (user_id, ip_cidr)
+    SELECT sqlc.arg('user_id'),UNNEST(sqlc.arg('ip_whitelist')::text[])
+    RETURNING ip_cidr
+)
+SELECT sqlc.arg('user_id')::UUID AS user_id,ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted;
 
 -- name: GetUserbyId :one
 SELECT 
@@ -77,11 +80,11 @@ group by u.id;
 WITH matching_pools AS (
     SELECT id, tag
     FROM pool 
-    WHERE tag = ANY($2::text[])
+    WHERE tag = ANY(sqlc.arg('tags')::text[])
 ), 
 inserted_rows AS (
     INSERT INTO user_pools (user_id, pool_id,data_limit)
-    SELECT $1, id,UNNEST($3::BIGINT[]) FROM matching_pools
+    SELECT $1, id,UNNEST(sqlc.arg('data_limits')::BIGINT[]) FROM matching_pools
     ON CONFLICT (user_id, pool_id) DO NOTHING
     RETURNING pool_id, user_id,data_limit
 )

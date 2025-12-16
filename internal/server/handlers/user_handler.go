@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi"
@@ -12,18 +11,21 @@ import (
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
-	server "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
+	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
+	service "github.com/torchlabssoftware/subnetwork_system/internal/server/service"
 )
 
 type UserHandler struct {
+	service service.UserService
 	queries *repository.Queries
 	db      *sql.DB
 }
 
-func NewUserHandler(q *repository.Queries, db *sql.DB) *UserHandler {
+func NewUserHandler(q *repository.Queries, db *sql.DB, service service.UserService) *UserHandler {
 	return &UserHandler{
 		queries: q,
 		db:      db,
+		service: service,
 	}
 }
 
@@ -51,101 +53,19 @@ func (h *UserHandler) AdminRoutes() http.Handler {
 }
 
 func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
-
-	//begin transaction
-	ctx, err := h.db.Begin()
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-	defer func() {
-		_ = ctx.Rollback()
-	}()
-
-	qtx := h.queries.WithTx(ctx)
-
-	//get responce
-	var req server.CreateUserRequest
+	var req models.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
 
-	//insert user data
-	createUserParams := repository.CreateUserParams{
-		Username: uuid.New().String()[:8],
-		Password: uuid.New().String()[:8],
-	}
-
-	user, err := qtx.CreateUser(r.Context(), createUserParams)
+	responce, code, message, err := h.service.CreateUser(r.Context(), &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	log.Println("uid: ", user.ID)
-
-	//insert allow_pool data
-	var allowPools []server.PoolDataStat
-	if req.AllowPools != nil || len(*req.AllowPools) > 0 {
-		allowPools = *req.AllowPools
-	}
-
-	pools := []string{}
-	dataLimit := []int64{}
-
-	for _, pool := range allowPools {
-		pools = append(pools, pool.Pool)
-		dataLimit = append(dataLimit, pool.DataLimit)
-	}
-
-	poolArgs := repository.AddUserPoolsByPoolTagsParams{
-		UserID:  user.ID,
-		Column2: pools,
-		Column3: dataLimit,
-	}
-
-	addedPools, err := qtx.AddUserPoolsByPoolTags(r.Context(), poolArgs)
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-
-	log.Println("addedPools: ", len(addedPools.InsertedTags))
-
-	//insert ipwhilist data
-	var ipWhitelist []string
-	if req.IpWhiteList != nil || len(*req.IpWhiteList) > 0 {
-		ipWhitelist = *req.IpWhiteList
-	}
-
-	userIpWhitelistParams := repository.InsertUserIpwhitelistParams{
-		UserID:  user.ID,
-		Column2: ipWhitelist,
-	}
-
-	ip, err := qtx.InsertUserIpwhitelist(r.Context(), userIpWhitelistParams)
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-
-	log.Println(len(ip))
-
-	if err := ctx.Commit(); err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-
-	responce := server.CreateUserResponce{
-		Id:          user.ID,
-		Username:    user.Username,
-		Password:    user.Password,
-		IpWhitelist: ipWhitelist,
-		AllowPools:  addedPools.InsertedTags,
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, responce)
+	functions.RespondwithJSON(w, code, *responce)
 }
 
 func (h *UserHandler) getUserbyId(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +85,7 @@ func (h *UserHandler) getUserbyId(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := server.GetUserByIdResponce{
+	resp := models.GetUserByIdResponce{
 		Id:          user.ID,
 		Username:    user.Username,
 		Password:    user.Password,
@@ -187,10 +107,10 @@ func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := []server.GetUserByIdResponce{}
+	resp := []models.GetUserByIdResponce{}
 
 	for _, user := range users {
-		resp = append(resp, server.GetUserByIdResponce{
+		resp = append(resp, models.GetUserByIdResponce{
 			Id:          user.ID,
 			Username:    user.Username,
 			Password:    user.Password,
@@ -214,7 +134,7 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req server.UpdateUserRequest
+	var req models.UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "invalid body", err)
 		return
@@ -234,7 +154,7 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := server.UpdateUserResponce{
+	resp := models.UpdateUserResponce{
 		Id:        user.ID,
 		Status:    user.Status,
 		UpdatedAt: user.UpdatedAt,
@@ -281,10 +201,10 @@ func (h *UserHandler) getDataUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := []server.GetDatausageReponce{}
+	res := []models.GetDatausageReponce{}
 
 	for _, dataUsage := range dataUsages {
-		res = append(res, server.GetDatausageReponce{
+		res = append(res, models.GetDatausageReponce{
 			DataLimit: dataUsage.DataLimit,
 			DataUsage: dataUsage.DataUsage,
 			PoolTag:   dataUsage.PoolTag,
@@ -309,17 +229,17 @@ func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	poolDataStat := []server.PoolDataStat{}
+	poolDataStat := []models.PoolDataStat{}
 
 	for i := range userPool.PoolIds {
-		poolDataStat = append(poolDataStat, server.PoolDataStat{
+		poolDataStat = append(poolDataStat, models.PoolDataStat{
 			Pool:      userPool.PoolIds[i],
 			DataLimit: userPool.DataLimits[i],
 			DataUsage: userPool.DataUsages[i],
 		})
 	}
 
-	resp := server.GetUserPoolResponce{
+	resp := models.GetUserPoolResponce{
 		UserId: userPool.ID,
 		Pools:  poolDataStat,
 	}
@@ -337,7 +257,7 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req server.AddUserPoolRequest
+	var req models.AddUserPoolRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return
@@ -352,9 +272,9 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	args := repository.AddUserPoolsByPoolTagsParams{
-		UserID:  id,
-		Column2: tags,
-		Column3: dataLimits,
+		UserID:     id,
+		Tags:       tags,
+		DataLimits: dataLimits,
 	}
 
 	pool, err := h.queries.AddUserPoolsByPoolTags(r.Context(), args)
@@ -363,16 +283,16 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userPool := []server.PoolDataStat{}
+	userPool := []models.PoolDataStat{}
 
 	for i, d := range pool.InsertedDataLimits {
-		userPool = append(userPool, server.PoolDataStat{
+		userPool = append(userPool, models.PoolDataStat{
 			Pool:      pool.InsertedTags[i],
 			DataLimit: d,
 		})
 	}
 
-	res := server.AddUserPoolResponce{
+	res := models.AddUserPoolResponce{
 		UserId:   id,
 		UserPool: userPool,
 	}
@@ -389,7 +309,7 @@ func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var req server.DeleteUserpoolRequest
+	var req models.DeleteUserpoolRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return
@@ -424,7 +344,7 @@ func (h *UserHandler) getUserIpWhitelist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	resp := server.GetUserIpwhitelistResponce{
+	resp := models.GetUserIpwhitelistResponce{
 		UserId:      userPool.UserID,
 		IpWhitelist: userPool.IpList,
 	}
@@ -442,15 +362,15 @@ func (h *UserHandler) addUserIpWhitelist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req server.AddUserIpwhitelistRequest
+	var req models.AddUserIpwhitelistRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return
 	}
 
 	args := repository.InsertUserIpwhitelistParams{
-		UserID:  id,
-		Column2: req.IpWhitelist,
+		UserID:      id,
+		IpWhitelist: req.IpWhitelist,
 	}
 
 	_, err = h.queries.InsertUserIpwhitelist(r.Context(), args)
@@ -459,7 +379,7 @@ func (h *UserHandler) addUserIpWhitelist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res := server.AddUserIpwhitelistResponce{
+	res := models.AddUserIpwhitelistResponce{
 		UserId:      id,
 		IpWhitelist: req.IpWhitelist,
 	}
@@ -476,7 +396,7 @@ func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var req server.DeleteUserIpwhitelistRequest
+	var req models.DeleteUserIpwhitelistRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return
@@ -497,7 +417,7 @@ func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request) {
-	var req server.GenerateproxyStringRequest
+	var req models.GenerateproxyStringRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
 		return

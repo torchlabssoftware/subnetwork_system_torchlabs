@@ -15,8 +15,11 @@ type CreateUserResponce struct {
 	Id          uuid.UUID `json:"id,omitempty"`
 	Username    string    `json:"username,omitempty"`
 	Password    string    `json:"password,omitempty"`
+	Status      string    `json:"status,omitempty"`
 	IpWhitelist []string  `json:"ip_whitelist,omitempty"`
 	AllowPools  []string  `json:"allow_pools,omitempty"`
+	Created_at  time.Time `json:"created_at,omitempty"`
+	Updated_at  time.Time `json:"updated_at,omitempty"`
 }
 
 type GetUserByIdResponce struct {

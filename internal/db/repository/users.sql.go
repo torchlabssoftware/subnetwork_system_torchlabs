@@ -36,9 +36,9 @@ GROUP BY i.user_id
 `
 
 type AddUserPoolsByPoolTagsParams struct {
-	UserID  uuid.UUID
-	Column2 []string
-	Column3 []int64
+	UserID     uuid.UUID
+	Tags       []string
+	DataLimits []int64
 }
 
 type AddUserPoolsByPoolTagsRow struct {
@@ -48,7 +48,7 @@ type AddUserPoolsByPoolTagsRow struct {
 }
 
 func (q *Queries) AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error) {
-	row := q.db.QueryRowContext(ctx, addUserPoolsByPoolTags, arg.UserID, pq.Array(arg.Column2), pq.Array(arg.Column3))
+	row := q.db.QueryRowContext(ctx, addUserPoolsByPoolTags, arg.UserID, pq.Array(arg.Tags), pq.Array(arg.DataLimits))
 	var i AddUserPoolsByPoolTagsRow
 	err := row.Scan(&i.UserID, pq.Array(&i.InsertedTags), pq.Array(&i.InsertedDataLimits))
 	return i, err
@@ -369,43 +369,30 @@ func (q *Queries) GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow
 	return i, err
 }
 
-const insertUserIpwhitelist = `-- name: InsertUserIpwhitelist :many
-INSERT INTO user_ip_whitelist(user_id,ip_cidr)
-SELECT $1, UNNEST($2::text[])
-RETURNING id, user_id, ip_cidr, created_at
+const insertUserIpwhitelist = `-- name: InsertUserIpwhitelist :one
+WITH inserted AS (
+    INSERT INTO user_ip_whitelist (user_id, ip_cidr)
+    SELECT $1,UNNEST($2::text[])
+    RETURNING ip_cidr
+)
+SELECT $1::UUID AS user_id,ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted
 `
 
 type InsertUserIpwhitelistParams struct {
-	UserID  uuid.UUID
-	Column2 []string
+	UserID      uuid.UUID
+	IpWhitelist []string
 }
 
-func (q *Queries) InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error) {
-	rows, err := q.db.QueryContext(ctx, insertUserIpwhitelist, arg.UserID, pq.Array(arg.Column2))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UserIpWhitelist
-	for rows.Next() {
-		var i UserIpWhitelist
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.IpCidr,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type InsertUserIpwhitelistRow struct {
+	UserID      uuid.UUID
+	IpWhitelist []string
+}
+
+func (q *Queries) InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) (InsertUserIpwhitelistRow, error) {
+	row := q.db.QueryRowContext(ctx, insertUserIpwhitelist, arg.UserID, pq.Array(arg.IpWhitelist))
+	var i InsertUserIpwhitelistRow
+	err := row.Scan(&i.UserID, pq.Array(&i.IpWhitelist))
+	return i, err
 }
 
 const softDeleteUser = `-- name: SoftDeleteUser :exec
