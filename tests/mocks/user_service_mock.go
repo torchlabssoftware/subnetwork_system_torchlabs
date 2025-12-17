@@ -116,3 +116,13 @@ func (m *MockUserService) RemoveUserIpWhitelist(ctx context.Context, id uuid.UUI
 	args := m.Called(ctx, id, req)
 	return args.Int(0), args.String(1), args.Error(2)
 }
+
+func (m *MockUserService) GenerateProxyString(ctx context.Context, req *models.GenerateproxyStringRequest) ([]string, int, string, error) {
+	args := m.Called(ctx, req)
+
+	var resp []string
+	if args.Get(0) != nil {
+		resp = args.Get(0).([]string)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}

@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
+	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
@@ -23,6 +25,7 @@ type UserService interface {
 	GetUserIpWhitelist(ctx context.Context, id uuid.UUID) (response *models.GetUserIpwhitelistResponce, code int, message string, err error)
 	AddUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.AddUserIpwhitelistRequest) (response *models.AddUserIpwhitelistResponce, code int, message string, err error)
 	RemoveUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.DeleteUserIpwhitelistRequest) (code int, message string, err error)
+	GenerateProxyString(ctx context.Context, req *models.GenerateproxyStringRequest) (response []string, code int, message string, err error)
 }
 
 type userService struct {
@@ -344,4 +347,40 @@ func (u *userService) RemoveUserIpWhitelist(ctx context.Context, id uuid.UUID, r
 	}
 
 	return http.StatusOK, "ip whitelist removed", nil
+}
+
+func (u *userService) GenerateProxyString(ctx context.Context, req *models.GenerateproxyStringRequest) (response []string, code int, message string, err error) {
+	tag := *req.PoolGroup + *req.ProxyType + "%"
+
+	data, err := u.queries.GenerateproxyString(ctx, repository.GenerateproxyStringParams{
+		Code:   *req.CountryCode,
+		Tag:    tag,
+		UserID: *req.UserId,
+	})
+	if err != nil {
+		return nil, http.StatusInternalServerError, "server error", err
+	}
+
+	userName := data.Username
+	password := data.Password
+	subdomain := data.Subdomain
+	port := data.Port
+
+	res := []string{}
+
+	for i := 0; i < *req.Amount; i++ {
+		config := functions.GenerateproxyString(*req.PoolGroup, *req.CountryCode, *req.IsSticky)
+		switch *req.Format {
+		case "ip:port:user:pass":
+			proxyString := fmt.Sprintf("%s"+"upstream-y.com"+":%d:%s:%s%s", subdomain, port, userName, password, config)
+			res = append(res, proxyString)
+		case "user:pass:ip:port":
+			proxyString := fmt.Sprintf("%s:%s%s:%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
+			res = append(res, proxyString)
+		case "user:pass@ip:port":
+			proxyString := fmt.Sprintf("%s:%s%s@%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
+			res = append(res, proxyString)
+		}
+	}
+	return res, http.StatusOK, "", nil
 }

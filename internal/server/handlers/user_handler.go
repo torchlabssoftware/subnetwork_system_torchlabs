@@ -364,39 +364,11 @@ func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tag := *req.PoolGroup + *req.ProxyType + "%"
-
-	data, err := h.queries.GenerateproxyString(r.Context(), repository.GenerateproxyStringParams{
-		Code:   *req.CountryCode,
-		Tag:    tag,
-		UserID: *req.UserId,
-	})
+	response, code, message, err := h.service.GenerateProxyString(r.Context(), &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	userName := data.Username
-	password := data.Password
-	subdomain := data.Subdomain
-	port := data.Port
-
-	res := []string{}
-
-	for i := 0; i < *req.Amount; i++ {
-		config := functions.GenerateproxyString(*req.PoolGroup, *req.CountryCode, *req.IsSticky)
-		switch *req.Format {
-		case "ip:port:user:pass":
-			proxyString := fmt.Sprintf("%s"+"upstream-y.com"+":%d:%s:%s%s", subdomain, port, userName, password, config)
-			res = append(res, proxyString)
-		case "user:pass:ip:port":
-			proxyString := fmt.Sprintf("%s:%s%s:%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
-			res = append(res, proxyString)
-		case "user:pass@ip:port":
-			proxyString := fmt.Sprintf("%s:%s%s@%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
-			res = append(res, proxyString)
-		}
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, res)
+	functions.RespondwithJSON(w, http.StatusOK, response)
 }
