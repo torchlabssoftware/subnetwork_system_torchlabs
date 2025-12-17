@@ -9,7 +9,9 @@ WITH inserted AS (
     SELECT sqlc.arg('user_id'),UNNEST(sqlc.arg('ip_whitelist')::text[])
     RETURNING ip_cidr
 )
-SELECT sqlc.arg('user_id')::UUID AS user_id,ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted;
+SELECT 
+sqlc.arg('user_id')::UUID AS user_id,
+ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted;
 
 -- name: GetUserbyId :one
 SELECT 
@@ -66,9 +68,9 @@ WHERE up.user_id = $1;
 select u.id,
     COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL),'{}')::TEXT[] as pool_tags
 from  "user" as u
-join user_pools as up
+left join user_pools as up
 on u.id = up.user_id
-join pool as p
+left join pool as p
 on up.pool_id = p.id
 WHERE u.id = $1
 group by u.id;
@@ -104,7 +106,6 @@ WHERE user_id = $1
 
 -- name: GetUserIpwhitelistByUserId :one
 SELECT 
-    u.id AS user_id, 
     COALESCE(
         ARRAY_AGG(DISTINCT w.ip_cidr) FILTER (WHERE w.ip_cidr IS NOT NULL), 
         '{}'
@@ -115,7 +116,7 @@ LEFT JOIN user_ip_whitelist w
 WHERE u.id = $1
 GROUP BY u.id;
 
--- name: DeleteUserIpwhitelist :exec
+-- name: DeleteUserIpwhitelist :execresult
 DELETE FROM user_ip_whitelist
 WHERE user_id = $1
   AND ip_cidr = ANY($2::TEXT[]);

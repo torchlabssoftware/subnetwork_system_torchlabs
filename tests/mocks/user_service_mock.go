@@ -91,3 +91,28 @@ func (m *MockUserService) RemoveUserAllowPool(ctx context.Context, id uuid.UUID,
 	args := m.Called(ctx, id, req)
 	return args.Int(0), args.String(1), args.Error(2)
 }
+
+func (m *MockUserService) GetUserIpWhitelist(ctx context.Context, id uuid.UUID) (*models.GetUserIpwhitelistResponce, int, string, error) {
+	args := m.Called(ctx, id)
+
+	var resp *models.GetUserIpwhitelistResponce
+	if args.Get(0) != nil {
+		resp = args.Get(0).(*models.GetUserIpwhitelistResponce)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}
+
+func (m *MockUserService) AddUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.AddUserIpwhitelistRequest) (*models.AddUserIpwhitelistResponce, int, string, error) {
+	args := m.Called(ctx, id, req)
+
+	var resp *models.AddUserIpwhitelistResponce
+	if args.Get(0) != nil {
+		resp = args.Get(0).(*models.AddUserIpwhitelistResponce)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}
+
+func (m *MockUserService) RemoveUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.DeleteUserIpwhitelistRequest) (int, string, error) {
+	args := m.Called(ctx, id, req)
+	return args.Int(0), args.String(1), args.Error(2)
+}

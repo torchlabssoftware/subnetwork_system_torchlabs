@@ -264,18 +264,13 @@ func (h *UserHandler) getUserIpWhitelist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userPool, err := h.queries.GetUserIpwhitelistByUserId(r.Context(), id)
+	response, code, message, err := h.service.GetUserIpWhitelist(r.Context(), id)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := models.GetUserIpwhitelistResponce{
-		UserId:      userPool.UserID,
-		IpWhitelist: userPool.IpList,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 
 }
 
@@ -294,23 +289,13 @@ func (h *UserHandler) addUserIpWhitelist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	args := repository.InsertUserIpwhitelistParams{
-		UserID:      id,
-		IpWhitelist: req.IpWhitelist,
-	}
-
-	_, err = h.queries.InsertUserIpwhitelist(r.Context(), args)
+	response, code, message, err := h.service.AddUserIpWhitelist(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	res := models.AddUserIpwhitelistResponce{
-		UserId:      id,
-		IpWhitelist: req.IpWhitelist,
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, res)
+	functions.RespondwithJSON(w, http.StatusCreated, *response)
 }
 
 func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Request) {
@@ -328,18 +313,19 @@ func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	arg := repository.DeleteUserIpwhitelistParams{
-		UserID:  id,
-		Column2: req.IpCidr,
-	}
-
-	err = h.queries.DeleteUserIpwhitelist(r.Context(), arg)
+	code, message, err := h.service.RemoveUserIpWhitelist(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusOK, nil)
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: message,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
 }
 
 func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request) {

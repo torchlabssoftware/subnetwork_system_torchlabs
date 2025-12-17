@@ -20,6 +20,9 @@ type UserService interface {
 	GetUserAllowPools(ctx context.Context, id uuid.UUID) (response *models.GetUserPoolResponce, code int, message string, err error)
 	AddUserAllowPool(ctx context.Context, id uuid.UUID, req *models.AddUserPoolRequest) (response *models.AddUserPoolResponce, code int, message string, err error)
 	RemoveUserAllowPool(ctx context.Context, id uuid.UUID, req *models.DeleteUserpoolRequest) (code int, message string, err error)
+	GetUserIpWhitelist(ctx context.Context, id uuid.UUID) (response *models.GetUserIpwhitelistResponce, code int, message string, err error)
+	AddUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.AddUserIpwhitelistRequest) (response *models.AddUserIpwhitelistResponce, code int, message string, err error)
+	RemoveUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.DeleteUserIpwhitelistRequest) (code int, message string, err error)
 }
 
 type userService struct {
@@ -286,4 +289,59 @@ func (u *userService) RemoveUserAllowPool(ctx context.Context, id uuid.UUID, req
 	}
 
 	return http.StatusOK, "pool removed", nil
+}
+
+func (u *userService) GetUserIpWhitelist(ctx context.Context, id uuid.UUID) (response *models.GetUserIpwhitelistResponce, code int, message string, err error) {
+	userPool, err := u.queries.GetUserIpwhitelistByUserId(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, http.StatusNotFound, "user ip whitelist not found", err
+		}
+		return nil, http.StatusInternalServerError, "server error", err
+	}
+
+	response = &models.GetUserIpwhitelistResponce{
+		IpWhitelist: userPool,
+	}
+
+	return response, http.StatusOK, "", nil
+}
+
+func (u *userService) AddUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.AddUserIpwhitelistRequest) (response *models.AddUserIpwhitelistResponce, code int, message string, err error) {
+	args := repository.InsertUserIpwhitelistParams{
+		UserID:      id,
+		IpWhitelist: req.IpWhitelist,
+	}
+
+	iplist, err := u.queries.InsertUserIpwhitelist(ctx, args)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, http.StatusNotFound, "nothing added to the database", err
+		}
+		return nil, http.StatusInternalServerError, "server error", err
+	}
+
+	response = &models.AddUserIpwhitelistResponce{
+		IpWhitelist: iplist.IpWhitelist,
+	}
+
+	return response, http.StatusCreated, "", nil
+}
+
+func (u *userService) RemoveUserIpWhitelist(ctx context.Context, id uuid.UUID, req *models.DeleteUserIpwhitelistRequest) (code int, message string, err error) {
+	arg := repository.DeleteUserIpwhitelistParams{
+		UserID:  id,
+		Column2: req.IpCidr,
+	}
+
+	res, err := u.queries.DeleteUserIpwhitelist(ctx, arg)
+	if err != nil {
+		return http.StatusInternalServerError, "server error", err
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		return http.StatusNotFound, "Nothing deleted from the database", nil
+	}
+
+	return http.StatusOK, "ip whitelist removed", nil
 }

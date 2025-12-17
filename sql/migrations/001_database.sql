@@ -29,7 +29,8 @@ CREATE TABLE "user" (
 CREATE TABLE user_ip_whitelist (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-    ip_cidr TEXT NOT NULL,
+    ip_cidr TEXT NOT NULL ,
+    UNIQUE(user_id, ip_cidr),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
