@@ -13,6 +13,7 @@ type Config struct {
 	DBURL          string
 	Admin_API_KEY  string
 	Worker_API_KEY string
+	CLICKHOUSE_URL string
 }
 
 func Load() Config {
@@ -32,6 +33,7 @@ func Load() Config {
 		DBURL:          getEnv("DB_URL", ""),
 		Admin_API_KEY:  getEnv("ADMIN_API_KEY", ""),
 		Worker_API_KEY: getEnv("WORKER_API_KEY", ""),
+		CLICKHOUSE_URL: getEnv("CLICKHOUSE_URL", ""),
 	}
 
 	config.validate()
@@ -51,6 +53,7 @@ func (c *Config) validate() {
 		"DBURL":          c.DBURL,
 		"ADMIN_API_KEY":  c.Admin_API_KEY,
 		"WORKER_API_KEY": c.Worker_API_KEY,
+		"CLICKHOUSE_URL": c.CLICKHOUSE_URL,
 	}
 
 	for key, val := range required {

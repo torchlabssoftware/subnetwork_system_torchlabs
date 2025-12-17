@@ -24,7 +24,13 @@ func main() {
 	}
 	defer pool.Close()
 
-	router := server.NewRouter(pool)
+	chConn, err := db.ConnectClickHouse(envConfig.CLICKHOUSE_URL)
+	if err != nil {
+		log.Fatal("Failed to init ClickHouse:", err)
+	}
+	defer chConn.Close()
+
+	router := server.NewRouter(pool, chConn)
 
 	srv := &http.Server{
 		Addr:         ":" + envConfig.PORT,

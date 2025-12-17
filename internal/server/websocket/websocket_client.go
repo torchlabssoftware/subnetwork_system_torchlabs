@@ -40,13 +40,14 @@ func (w *Worker) ReadMessage() {
 		return
 	}
 
-	w.Connection.SetReadLimit(512)
+	w.Connection.SetReadLimit(4096)
 
 	w.Connection.SetPongHandler(w.PongHandler)
 
 	for {
 		_, payload, err := w.Connection.ReadMessage()
 		if err != nil {
+			log.Println("message read error.Connetion closed:", err)
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("Error reading message: %v", err)
 			}
@@ -86,6 +87,7 @@ func (w *Worker) WriteMessage() {
 				if err := w.Connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
 					log.Println("Connetion closed:", err)
 				}
+				log.Println("message write error.Connetion closed:")
 				return
 			}
 

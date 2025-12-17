@@ -13,6 +13,7 @@ import (
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
 	server "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
+	"github.com/torchlabssoftware/subnetwork_system/internal/server/service"
 	wsm "github.com/torchlabssoftware/subnetwork_system/internal/server/websocket"
 )
 
@@ -20,14 +21,16 @@ type WorkerHandler struct {
 	queries   *repository.Queries
 	db        *sql.DB
 	wsManager *wsm.WebsocketManager
+	analytics service.AnalyticsService
 }
 
-func NewWorkerHandler(q *repository.Queries, db *sql.DB) *WorkerHandler {
+func NewWorkerHandler(q *repository.Queries, db *sql.DB, analytics service.AnalyticsService) *WorkerHandler {
 	w := &WorkerHandler{
-		queries: q,
-		db:      db,
+		queries:   q,
+		db:        db,
+		analytics: analytics,
 	}
-	w.wsManager = wsm.NewWebsocketManager(q)
+	w.wsManager = wsm.NewWebsocketManager(q, analytics)
 	return w
 }
 
@@ -47,7 +50,7 @@ func (wh *WorkerHandler) AdminRoutes() http.Handler {
 func (wh *WorkerHandler) WorkerRoutes() http.Handler {
 	r := chi.NewRouter()
 
-	r.Get("/ws/login", middleware.WorkerAuthentication(wh.login))
+	r.Post("/ws/login", middleware.WorkerAuthentication(wh.login))
 	r.Get("/ws/serve", wh.serveWS)
 	return r
 }

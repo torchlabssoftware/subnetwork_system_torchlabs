@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
+	"github.com/torchlabssoftware/subnetwork_system/internal/server/service"
 )
 
 var (
@@ -27,17 +28,19 @@ var (
 type WebsocketManager struct {
 	Workers WorkerList
 	sync.RWMutex
-	Handlers map[string]EventHandler
-	queries  *repository.Queries
-	OtpMap   RetentionMap
+	Handlers  map[string]EventHandler
+	queries   *repository.Queries
+	OtpMap    RetentionMap
+	analytics service.AnalyticsService
 }
 
-func NewWebsocketManager(queries *repository.Queries) *WebsocketManager {
+func NewWebsocketManager(queries *repository.Queries, analytics service.AnalyticsService) *WebsocketManager {
 	w := &WebsocketManager{
-		Workers:  make(WorkerList),
-		Handlers: make(map[string]EventHandler),
-		queries:  queries,
-		OtpMap:   NewRetentionMap(context.Background(), 10*time.Second),
+		Workers:   make(WorkerList),
+		Handlers:  make(map[string]EventHandler),
+		queries:   queries,
+		OtpMap:    NewRetentionMap(context.Background(), 10*time.Second),
+		analytics: analytics,
 	}
 	w.setupEventHandlers()
 	return w
@@ -45,11 +48,14 @@ func NewWebsocketManager(queries *repository.Queries) *WebsocketManager {
 
 func (ws *WebsocketManager) setupEventHandlers() {
 	ws.Handlers["login"] = ws.handleLogin
+	ws.Handlers["telemetry_usage"] = ws.handleTelemetryUsage
+	ws.Handlers["telemetry_health"] = ws.handleTelemetryHealth
 }
 
 func (ws *WebsocketManager) RouteEvent(event Event, w *Worker) error {
 	if handler, ok := ws.Handlers[event.Type]; ok {
 		if err := handler(event, w); err != nil {
+			log.Println("Error routing event:", err)
 			return err
 		}
 		return nil
@@ -103,6 +109,40 @@ func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
 	}
 
 	return nil
+}
+
+func (ws *WebsocketManager) handleTelemetryUsage(event Event, w *Worker) error {
+	var payload service.UserDataUsage
+	if m, ok := event.Payload.(map[string]interface{}); ok {
+		data, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("could not marshal payload map: %v", err)
+		}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return fmt.Errorf("invalid telemetry usage payload: %v", err)
+		}
+	} else {
+		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
+	}
+
+	return ws.analytics.RecordUserDataUsage(context.Background(), payload)
+}
+
+func (ws *WebsocketManager) handleTelemetryHealth(event Event, w *Worker) error {
+	var payload service.WorkerHealth
+	if m, ok := event.Payload.(map[string]interface{}); ok {
+		data, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("could not marshal payload map: %v", err)
+		}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return fmt.Errorf("invalid telemetry health payload: %v", err)
+		}
+	} else {
+		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
+	}
+
+	return ws.analytics.RecordWorkerHealth(context.Background(), payload)
 }
 
 func (ws *WebsocketManager) AddWorker(w *Worker) {
