@@ -17,6 +17,9 @@ type UserService interface {
 	UpdateUserStatus(ctx context.Context, id uuid.UUID, req *models.UpdateUserRequest) (response *models.UpdateUserResponce, code int, message string, err error)
 	DeleteUser(ctx context.Context, id uuid.UUID) (code int, message string, err error)
 	GetDataUsage(ctx context.Context, id uuid.UUID) (response []models.GetDatausageReponce, code int, message string, err error)
+	GetUserAllowPools(ctx context.Context, id uuid.UUID) (response *models.GetUserPoolResponce, code int, message string, err error)
+	AddUserAllowPool(ctx context.Context, id uuid.UUID, req *models.AddUserPoolRequest) (response *models.AddUserPoolResponce, code int, message string, err error)
+	RemoveUserAllowPool(ctx context.Context, id uuid.UUID, req *models.DeleteUserpoolRequest) (code int, message string, err error)
 }
 
 type userService struct {
@@ -206,4 +209,81 @@ func (u *userService) GetDataUsage(ctx context.Context, id uuid.UUID) (response 
 	}
 
 	return response, http.StatusOK, "", nil
+}
+
+func (u *userService) GetUserAllowPools(ctx context.Context, id uuid.UUID) (response *models.GetUserPoolResponce, code int, message string, err error) {
+	userPool, err := u.queries.GetUserPoolsByUserId(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, http.StatusNotFound, "pools not found", err
+		}
+		return nil, http.StatusInternalServerError, "server error", err
+	}
+
+	poolDataStat := []string{}
+
+	poolDataStat = append(poolDataStat, userPool.PoolTags...)
+
+	response = &models.GetUserPoolResponce{
+		Pools: poolDataStat,
+	}
+
+	return response, http.StatusOK, "", nil
+}
+
+func (u *userService) AddUserAllowPool(ctx context.Context, id uuid.UUID, req *models.AddUserPoolRequest) (response *models.AddUserPoolResponce, code int, message string, err error) {
+	tags := []string{}
+	dataLimits := []int64{}
+
+	for _, pool := range req.UserPool {
+		tags = append(tags, pool.Pool)
+		dataLimits = append(dataLimits, pool.DataLimit)
+	}
+
+	args := repository.AddUserPoolsByPoolTagsParams{
+		UserID:     id,
+		Tags:       tags,
+		DataLimits: dataLimits,
+	}
+
+	pool, err := u.queries.AddUserPoolsByPoolTags(ctx, args)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, http.StatusNotFound, "Nothing added to the database", err
+		}
+		return nil, http.StatusInternalServerError, "server error", err
+	}
+
+	userPool := []models.PoolDataStat{}
+
+	for i, d := range pool.InsertedDataLimits {
+		userPool = append(userPool, models.PoolDataStat{
+			Pool:      pool.InsertedTags[i],
+			DataLimit: d,
+		})
+	}
+
+	response = &models.AddUserPoolResponce{
+		UserPool: userPool,
+	}
+
+	return response, http.StatusCreated, "", nil
+}
+
+func (u *userService) RemoveUserAllowPool(ctx context.Context, id uuid.UUID, req *models.DeleteUserpoolRequest) (code int, message string, err error) {
+	args := repository.DeleteUserPoolsByTagsParams{
+		UserID:  id,
+		Column2: req.UserPool,
+	}
+
+	res, err := u.queries.DeleteUserPoolsByTags(ctx, args)
+	if err != nil {
+		return http.StatusInternalServerError, "server error", err
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		return http.StatusNotFound, "Nothing deleted from the database", nil
+	}
+
+	return http.StatusOK, "pool removed", nil
 }

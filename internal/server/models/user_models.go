@@ -56,8 +56,7 @@ type PoolDataStat struct {
 }
 
 type GetUserPoolResponce struct {
-	UserId uuid.UUID      `json:"user_id"`
-	Pools  []PoolDataStat `json:"pools"`
+	Pools []string `json:"pools"`
 }
 
 type AddUserPoolRequest struct {
@@ -65,7 +64,6 @@ type AddUserPoolRequest struct {
 }
 
 type AddUserPoolResponce struct {
-	UserId   uuid.UUID      `json:"user_id,omitempty"`
 	UserPool []PoolDataStat `json:"user_pool,omitempty"`
 }
 

@@ -6,6 +6,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -26,7 +27,7 @@ type Querier interface {
 	DeleteUpstream(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
-	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
+	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) (sql.Result, error)
 	DeleteWorkerByName(ctx context.Context, name string) error
 	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error
 	GenerateproxyString(ctx context.Context, arg GenerateproxyStringParams) (GenerateproxyStringRow, error)
@@ -47,7 +48,6 @@ type Querier interface {
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) (InsertUserIpwhitelistRow, error)
 	InsetPool(ctx context.Context, arg InsetPoolParams) (Pool, error)
 	ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUpstreamsRow, error)
-	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 	UpdatePool(ctx context.Context, arg UpdatePoolParams) (Pool, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 }

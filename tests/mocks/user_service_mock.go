@@ -66,3 +66,28 @@ func (m *MockUserService) GetDataUsage(ctx context.Context, id uuid.UUID) ([]mod
 	}
 	return resp, args.Int(1), args.String(2), args.Error(3)
 }
+
+func (m *MockUserService) GetUserAllowPools(ctx context.Context, id uuid.UUID) (*models.GetUserPoolResponce, int, string, error) {
+	args := m.Called(ctx, id)
+
+	var resp *models.GetUserPoolResponce
+	if args.Get(0) != nil {
+		resp = args.Get(0).(*models.GetUserPoolResponce)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}
+
+func (m *MockUserService) AddUserAllowPool(ctx context.Context, id uuid.UUID, req *models.AddUserPoolRequest) (*models.AddUserPoolResponce, int, string, error) {
+	args := m.Called(ctx, id, req)
+
+	var resp *models.AddUserPoolResponce
+	if args.Get(0) != nil {
+		resp = args.Get(0).(*models.AddUserPoolResponce)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}
+
+func (m *MockUserService) RemoveUserAllowPool(ctx context.Context, id uuid.UUID, req *models.DeleteUserpoolRequest) (int, string, error) {
+	args := m.Called(ctx, id, req)
+	return args.Int(0), args.String(1), args.Error(2)
+}

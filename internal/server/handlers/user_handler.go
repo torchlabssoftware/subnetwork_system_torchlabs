@@ -192,29 +192,13 @@ func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	userPool, err := h.queries.GetUserPoolsByUserId(r.Context(), id)
+	response, code, message, err := h.service.GetUserAllowPools(r.Context(), id)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	poolDataStat := []models.PoolDataStat{}
-
-	for i := range userPool.PoolIds {
-		poolDataStat = append(poolDataStat, models.PoolDataStat{
-			Pool:      userPool.PoolIds[i],
-			DataLimit: userPool.DataLimits[i],
-			DataUsage: userPool.DataUsages[i],
-		})
-	}
-
-	resp := models.GetUserPoolResponce{
-		UserId: userPool.ID,
-		Pools:  poolDataStat,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
-
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 }
 
 func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
@@ -232,41 +216,13 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tags := []string{}
-	dataLimits := []int64{}
-
-	for _, pool := range req.UserPool {
-		tags = append(tags, pool.Pool)
-		dataLimits = append(dataLimits, pool.DataLimit)
-	}
-
-	args := repository.AddUserPoolsByPoolTagsParams{
-		UserID:     id,
-		Tags:       tags,
-		DataLimits: dataLimits,
-	}
-
-	pool, err := h.queries.AddUserPoolsByPoolTags(r.Context(), args)
+	response, code, message, err := h.service.AddUserAllowPool(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	userPool := []models.PoolDataStat{}
-
-	for i, d := range pool.InsertedDataLimits {
-		userPool = append(userPool, models.PoolDataStat{
-			Pool:      pool.InsertedTags[i],
-			DataLimit: d,
-		})
-	}
-
-	res := models.AddUserPoolResponce{
-		UserId:   id,
-		UserPool: userPool,
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, res)
+	functions.RespondwithJSON(w, http.StatusCreated, *response)
 }
 
 func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request) {
@@ -284,18 +240,19 @@ func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	arg := repository.DeleteUserPoolsByTagsParams{
-		UserID:  id,
-		Column2: req.UserPool,
-	}
-
-	err = h.queries.DeleteUserPoolsByTags(r.Context(), arg)
+	code, message, err := h.service.RemoveUserAllowPool(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusOK, nil)
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: message,
+	}
+
+	functions.RespondwithJSON(w, code, res)
 }
 
 func (h *UserHandler) getUserIpWhitelist(w http.ResponseWriter, r *http.Request) {
