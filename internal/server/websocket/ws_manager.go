@@ -52,6 +52,7 @@ func (ws *WebsocketManager) setupEventHandlers() {
 	ws.Handlers["telemetry_usage"] = ws.handleTelemetryUsage
 	ws.Handlers["telemetry_health"] = ws.handleTelemetryHealth
 	ws.Handlers["request_config"] = ws.handleRequestConfig
+	ws.Handlers["telemetry_access_log"] = ws.handleTelemetryAccessLog
 }
 
 func (ws *WebsocketManager) RouteEvent(event Event, w *Worker) error {
@@ -155,6 +156,23 @@ func (ws *WebsocketManager) handleTelemetryHealth(event Event, w *Worker) error 
 	}
 
 	return ws.analytics.RecordWorkerHealth(context.Background(), payload)
+}
+
+func (ws *WebsocketManager) handleTelemetryAccessLog(event Event, w *Worker) error {
+	var payload service.WebsiteAccess
+	if m, ok := event.Payload.(map[string]interface{}); ok {
+		data, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("could not marshal payload map: %v", err)
+		}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return fmt.Errorf("invalid telemetry access log payload: %v", err)
+		}
+	} else {
+		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
+	}
+
+	return ws.analytics.RecordWebsiteAccess(context.Background(), payload)
 }
 
 func (ws *WebsocketManager) AddWorker(w *Worker) {

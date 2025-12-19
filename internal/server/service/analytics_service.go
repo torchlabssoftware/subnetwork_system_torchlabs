@@ -12,6 +12,7 @@ import (
 type AnalyticsService interface {
 	RecordUserDataUsage(ctx context.Context, data UserDataUsage) error
 	RecordWorkerHealth(ctx context.Context, data WorkerHealth) error
+	RecordWebsiteAccess(ctx context.Context, data WebsiteAccess) error
 	GetUserUsage(ctx context.Context, userID string, from, to time.Time, granularity string) (interface{}, error)
 }
 
@@ -128,6 +129,44 @@ func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data WorkerHe
 	}
 
 	return nil
+}
+
+type WebsiteAccess struct {
+	UserID        uuid.UUID `json:"user_id"`
+	Username      string    `json:"username"`
+	Domain        string    `json:"domain"`
+	Subdomain     string    `json:"subdomain"`
+	FullURL       string    `json:"full_url"`
+	BytesSent     uint64    `json:"bytes_sent"`
+	BytesReceived uint64    `json:"bytes_received"`
+	RequestMethod string    `json:"request_method"`
+	StatusCode    uint16    `json:"status_code"`
+	ContentType   string    `json:"content_type"`
+	UserAgent     string    `json:"user_agent"`
+	SessionID     string    `json:"session_id"`
+	SourceIP      string    `json:"source_ip"`
+}
+
+func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data WebsiteAccess) error {
+	// Validate SourceIP
+	if data.SourceIP == "" {
+		data.SourceIP = "0.0.0.0"
+	}
+
+	query := `
+		INSERT INTO analytics.website_access (
+			user_id, username, domain, subdomain, full_url,
+			bytes_sent, bytes_received, request_method, status_code,
+			content_type, user_agent, session_id, source_ip
+		) VALUES (
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		)
+	`
+	return s.conn.Exec(ctx, query,
+		data.UserID, data.Username, data.Domain, data.Subdomain, data.FullURL,
+		data.BytesSent, data.BytesReceived, data.RequestMethod, data.StatusCode,
+		data.ContentType, data.UserAgent, data.SessionID, data.SourceIP,
+	)
 }
 
 type UserUsageHourly struct {
