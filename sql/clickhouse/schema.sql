@@ -118,6 +118,21 @@ PARTITION BY toYYYYMM(date)
 ORDER BY (worker_id, date, timestamp)
 TTL date + INTERVAL 60 DAY;
 
+-- Detailed Upstream Health metrics
+CREATE TABLE IF NOT EXISTS analytics.worker_upstream_health (
+    timestamp DateTime64(3) DEFAULT now64(3),
+    date Date DEFAULT toDate(timestamp),
+    worker_id UUID,
+    upstream_id UUID,
+    upstream_tag String,
+    status String,
+    latency Int64,
+    error_rate Float32
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(date)
+ORDER BY (worker_id, upstream_id, date, timestamp)
+TTL date + INTERVAL 60 DAY;
+
 -- User behavior analytics
 CREATE TABLE IF NOT EXISTS analytics.user_behavior (
     timestamp DateTime64(3) DEFAULT now64(3),
