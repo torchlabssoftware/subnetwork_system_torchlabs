@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	PORT           string
-	DBURL          string
+	POSTGRES_URL   string
 	Admin_API_KEY  string
 	Worker_API_KEY string
 	CLICKHOUSE_URL string
@@ -30,7 +30,7 @@ func Load() Config {
 
 	config := Config{
 		PORT:           getEnv("PORT", "8080"),
-		DBURL:          getEnv("DB_URL", ""),
+		POSTGRES_URL:   getEnv("POSTGRES_URL", ""),
 		Admin_API_KEY:  getEnv("ADMIN_API_KEY", ""),
 		Worker_API_KEY: getEnv("WORKER_API_KEY", ""),
 		CLICKHOUSE_URL: getEnv("CLICKHOUSE_URL", ""),
@@ -50,7 +50,7 @@ func getEnv(key, fallback string) string {
 
 func (c *Config) validate() {
 	required := map[string]string{
-		"DBURL":          c.DBURL,
+		"POSTGRES_URL":   c.POSTGRES_URL,
 		"ADMIN_API_KEY":  c.Admin_API_KEY,
 		"WORKER_API_KEY": c.Worker_API_KEY,
 		"CLICKHOUSE_URL": c.CLICKHOUSE_URL,

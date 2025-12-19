@@ -11,18 +11,16 @@ import (
 	"github.com/torchlabssoftware/subnetwork_system/internal/config"
 	db "github.com/torchlabssoftware/subnetwork_system/internal/db"
 	"github.com/torchlabssoftware/subnetwork_system/internal/server"
-
-	_ "github.com/lib/pq"
 )
 
 func main() {
 	envConfig := config.Load()
 
-	pool, err := db.Connect(envConfig.DBURL)
+	pgConn, err := db.ConnectPostgres(envConfig.POSTGRES_URL)
 	if err != nil {
-		log.Fatal("Failed to init DB:", err)
+		log.Fatal("Failed to init PostgresDB:", err)
 	}
-	defer pool.Close()
+	defer pgConn.Close()
 
 	chConn, err := db.ConnectClickHouse(envConfig.CLICKHOUSE_URL)
 	if err != nil {
@@ -30,7 +28,7 @@ func main() {
 	}
 	defer chConn.Close()
 
-	router := server.NewRouter(pool, chConn)
+	router := server.NewRouter(pgConn, chConn)
 
 	srv := &http.Server{
 		Addr:         ":" + envConfig.PORT,
@@ -56,6 +54,20 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("server shutdown error: %v", err)
+	}
+
+	log.Println("closing database connections...")
+
+	if pgConn != nil {
+		if err := pgConn.Close(); err != nil {
+			log.Printf("error closing Postgres: %v", err)
+		}
+	}
+
+	if chConn != nil {
+		if err := chConn.Close(); err != nil {
+			log.Printf("error closing ClickHouse: %v", err)
+		}
 	}
 	log.Println("server stopped")
 

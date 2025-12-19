@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func Connect(databaseURL string) (*sql.DB, error) {
+func ConnectPostgres(databaseURL string) (*sql.DB, error) {
 
-	db, err := sql.Open("postgres", databaseURL)
+	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return nil, err
 	}
