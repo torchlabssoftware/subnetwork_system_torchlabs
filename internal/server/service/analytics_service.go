@@ -14,6 +14,8 @@ type AnalyticsService interface {
 	RecordWorkerHealth(ctx context.Context, data WorkerHealth) error
 	RecordWebsiteAccess(ctx context.Context, data WebsiteAccess) error
 	GetUserUsage(ctx context.Context, userID string, from, to time.Time, granularity string) (interface{}, error)
+	GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]WorkerHealth, error)
+	GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]WebsiteAccess, error)
 }
 
 type analyticsService struct {
@@ -203,4 +205,39 @@ func (s *analyticsService) GetUserUsage(ctx context.Context, userID string, from
 		return results, nil
 	}
 	return nil, fmt.Errorf("unsupported granularity: %s", granularity)
+}
+
+func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]WorkerHealth, error) {
+	query := `
+		SELECT 
+			worker_id, worker_name, region, status, cpu_usage, memory_usage,
+			active_connections, total_connections, bytes_throughput_per_sec, error_rate
+		FROM analytics.worker_health
+		WHERE worker_id = ? AND timestamp >= ? AND timestamp <= ?
+		ORDER BY timestamp
+		LIMIT 1000
+	`
+	var results []WorkerHealth
+	if err := s.conn.Select(ctx, &results, query, workerID, from, to); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]WebsiteAccess, error) {
+	query := `
+		SELECT
+			user_id, username, domain, subdomain, full_url,
+			bytes_sent, bytes_received, request_method, status_code,
+			content_type, user_agent, session_id, source_ip
+		FROM analytics.website_access
+		WHERE user_id = ? AND timestamp >= ? AND timestamp <= ?
+		ORDER BY timestamp
+		LIMIT 1000
+	`
+	var results []WebsiteAccess
+	if err := s.conn.Select(ctx, &results, query, userID, from, to); err != nil {
+		return nil, err
+	}
+	return results, nil
 }

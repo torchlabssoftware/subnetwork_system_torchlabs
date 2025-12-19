@@ -20,6 +20,8 @@ func NewAnalyticsHandler(s service.AnalyticsService) *AnalyticsHandler {
 
 func (h *AnalyticsHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/user/{user_id}/usage", h.GetUserUsage)
+	r.Get("/worker/{worker_id}/health", h.GetWorkerHealth)
+	r.Get("/user/{user_id}/website-access", h.GetUserWebsiteAccess)
 }
 
 func (h *AnalyticsHandler) GetUserUsage(w http.ResponseWriter, r *http.Request) {
@@ -47,6 +49,54 @@ func (h *AnalyticsHandler) GetUserUsage(w http.ResponseWriter, r *http.Request) 
 	data, err := h.service.GetUserUsage(r.Context(), userID, from, to, granularity)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to get analytics data", err)
+		return
+	}
+
+	json.NewEncoder(w).Encode(data)
+}
+
+func (h *AnalyticsHandler) GetWorkerHealth(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "worker_id")
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		from = time.Now().AddDate(0, 0, -7)
+	}
+
+	to, err := time.Parse("2006-01-02", toStr)
+	if err != nil {
+		to = time.Now()
+	}
+
+	data, err := h.service.GetWorkerHealth(r.Context(), workerID, from, to)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to get worker health data", err)
+		return
+	}
+
+	json.NewEncoder(w).Encode(data)
+}
+
+func (h *AnalyticsHandler) GetUserWebsiteAccess(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "user_id")
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		from = time.Now().AddDate(0, 0, -7)
+	}
+
+	to, err := time.Parse("2006-01-02", toStr)
+	if err != nil {
+		to = time.Now()
+	}
+
+	data, err := h.service.GetUserWebsiteAccess(r.Context(), userID, from, to)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to get website access data", err)
 		return
 	}
 
