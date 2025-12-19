@@ -74,7 +74,7 @@ func (wh *WorkerHandler) login(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get worker", err)
 		return
 	}
-	otp := wh.wsManager.OtpMap.NewOTP()
+	otp := wh.wsManager.OtpMap.NewOTP(*req.WorkerId)
 	resp := server.WorkerLoginResponce{
 		Otp: otp.Key,
 	}
@@ -87,11 +87,12 @@ func (wh *WorkerHandler) serveWS(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusBadRequest, "OTP is required", fmt.Errorf("otp is required"))
 		return
 	}
-	if !wh.wsManager.OtpMap.VerifyOTP(otp) {
+	valid, workerID := wh.wsManager.OtpMap.VerifyOTP(otp)
+	if !valid {
 		functions.RespondwithError(w, http.StatusUnauthorized, "Invalid OTP", fmt.Errorf("invalid otp"))
 		return
 	}
-	wh.wsManager.ServeWS(w, r)
+	wh.wsManager.ServeWS(w, r, workerID)
 }
 
 func (wh *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {

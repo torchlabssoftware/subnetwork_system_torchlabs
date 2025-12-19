@@ -8,8 +8,9 @@ import (
 )
 
 type OTP struct {
-	Key     string
-	Created time.Time
+	Key      string
+	Created  time.Time
+	WorkerID uuid.UUID
 }
 
 type RetentionMap map[string]*OTP
@@ -20,21 +21,22 @@ func NewRetentionMap(context context.Context, retentionPeriod time.Duration) Ret
 	return rm
 }
 
-func (rm RetentionMap) NewOTP() OTP {
+func (rm RetentionMap) NewOTP(workerID uuid.UUID) OTP {
 	o := OTP{
-		Key:     uuid.NewString(),
-		Created: time.Now(),
+		Key:      uuid.NewString(),
+		Created:  time.Now(),
+		WorkerID: workerID,
 	}
 	rm[o.Key] = &o
 	return o
 }
 
-func (rm RetentionMap) VerifyOTP(key string) bool {
-	if _, ok := rm[key]; !ok {
-		return false
+func (rm RetentionMap) VerifyOTP(key string) (bool, uuid.UUID) {
+	if otp, ok := rm[key]; ok {
+		delete(rm, key)
+		return true, otp.WorkerID
 	}
-	delete(rm, key)
-	return true
+	return false, uuid.Nil
 }
 
 func (rm RetentionMap) Retention(ctx context.Context, timePeriod time.Duration) {

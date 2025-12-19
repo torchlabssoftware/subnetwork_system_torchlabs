@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -17,6 +18,8 @@ type Worker struct {
 	Connection *websocket.Conn
 	Manager    *WebsocketManager
 	egress     chan Event
+	ID         uuid.UUID
+	Name       string
 }
 
 type WorkerList map[*Worker]bool

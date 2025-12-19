@@ -55,3 +55,21 @@ SELECT w.id FROM worker w
 WHERE w.id = $1;
 
 
+
+-- name: GetWorkerPoolConfig :many
+SELECT 
+    w.name AS worker_name,
+    p.id AS pool_id,
+    p.tag AS pool_tag,
+    p.port AS pool_port,
+    p.subdomain AS pool_subdomain,
+    u.id AS upstream_id,
+    u.tag AS upstream_tag,
+    u.domain AS upstream_address,
+    u.port AS upstream_port,
+    puw.weight
+FROM worker w
+JOIN pool p ON w.pool_id = p.id
+JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+JOIN upstream u ON puw.upstream_id = u.id
+WHERE w.id = $1;

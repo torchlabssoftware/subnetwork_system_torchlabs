@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
@@ -50,6 +51,7 @@ func (ws *WebsocketManager) setupEventHandlers() {
 	ws.Handlers["login"] = ws.handleLogin
 	ws.Handlers["telemetry_usage"] = ws.handleTelemetryUsage
 	ws.Handlers["telemetry_health"] = ws.handleTelemetryHealth
+	ws.Handlers["request_config"] = ws.handleRequestConfig
 }
 
 func (ws *WebsocketManager) RouteEvent(event Event, w *Worker) error {
@@ -64,16 +66,26 @@ func (ws *WebsocketManager) RouteEvent(event Event, w *Worker) error {
 	}
 }
 
-func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request) {
+func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID) {
 	conn, err := websocketUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "Could not open websocket connection", err)
 		return
 	}
 
-	log.Println("Worker connected via WebSocket.")
-
 	worker := NewWorker(conn, ws)
+	worker.ID = workerID
+
+	// Fetch initial config to get worker name and validate existence
+	// We can do this asynchronously but it's better to have name set up
+	go func() {
+		if err := ws.sendWorkerConfiguration(worker); err != nil {
+			log.Printf("Failed to send initial configuration to worker %s: %v", workerID, err)
+		}
+	}()
+
+	log.Println("Worker connected via WebSocket:", workerID)
+
 	ws.AddWorker(worker)
 	go worker.ReadMessage()
 	go worker.WriteMessage()
@@ -158,4 +170,70 @@ func (ws *WebsocketManager) RemoveWorker(w *Worker) {
 		w.Connection.Close()
 		delete(ws.Workers, w)
 	}
+}
+
+type UpstreamConfig struct {
+	UpstreamID      uuid.UUID `json:"upstream_id"`
+	UpstreamTag     string    `json:"upstream_tag"`
+	UpstreamAddress string    `json:"upstream_address"`
+	UpstreamHost    string    `json:"upstream_host"`
+	UpstreamPort    int32     `json:"upstream_port"`
+	Weight          int32     `json:"weight"`
+}
+
+type ConfigPayload struct {
+	PoolID        uuid.UUID        `json:"pool_id"`
+	PoolTag       string           `json:"pool_tag"`
+	PoolPort      int32            `json:"pool_port"`
+	PoolSubdomain string           `json:"pool_subdomain"`
+	Upstreams     []UpstreamConfig `json:"upstreams"`
+}
+
+func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
+	return ws.sendWorkerConfiguration(w)
+}
+
+func (ws *WebsocketManager) sendWorkerConfiguration(w *Worker) error {
+	rows, err := ws.queries.GetWorkerPoolConfig(context.Background(), w.ID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch worker pool config: %v", err)
+	}
+
+	if len(rows) == 0 {
+		return fmt.Errorf("no configuration found for worker %s", w.ID)
+	}
+
+	// Assume all rows belong to the same pool (worker is assigned to one pool)
+	firstRow := rows[0]
+
+	// Update worker name if not set
+	if w.Name == "" {
+		w.Name = firstRow.WorkerName
+	}
+
+	config := ConfigPayload{
+		PoolID:        firstRow.PoolID,
+		PoolTag:       firstRow.PoolTag,
+		PoolPort:      firstRow.PoolPort,
+		PoolSubdomain: firstRow.PoolSubdomain,
+		Upstreams:     make([]UpstreamConfig, 0),
+	}
+
+	for _, row := range rows {
+		config.Upstreams = append(config.Upstreams, UpstreamConfig{
+			UpstreamID:      row.UpstreamID,
+			UpstreamTag:     row.UpstreamTag,
+			UpstreamAddress: row.UpstreamAddress,
+			UpstreamHost:    row.UpstreamAddress, // Using domain as host
+			UpstreamPort:    row.UpstreamPort,
+			Weight:          row.Weight,
+		})
+	}
+
+	w.egress <- Event{
+		Type:    "config",
+		Payload: config,
+	}
+
+	return nil
 }

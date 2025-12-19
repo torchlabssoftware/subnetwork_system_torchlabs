@@ -217,3 +217,69 @@ func (q *Queries) GetWorkerByName(ctx context.Context, name string) (GetWorkerBy
 	)
 	return i, err
 }
+
+const getWorkerPoolConfig = `-- name: GetWorkerPoolConfig :many
+SELECT 
+    w.name AS worker_name,
+    p.id AS pool_id,
+    p.tag AS pool_tag,
+    p.port AS pool_port,
+    p.subdomain AS pool_subdomain,
+    u.id AS upstream_id,
+    u.tag AS upstream_tag,
+    u.domain AS upstream_address,
+    u.port AS upstream_port,
+    puw.weight
+FROM worker w
+JOIN pool p ON w.pool_id = p.id
+JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+JOIN upstream u ON puw.upstream_id = u.id
+WHERE w.id = $1
+`
+
+type GetWorkerPoolConfigRow struct {
+	WorkerName      string
+	PoolID          uuid.UUID
+	PoolTag         string
+	PoolPort        int32
+	PoolSubdomain   string
+	UpstreamID      uuid.UUID
+	UpstreamTag     string
+	UpstreamAddress string
+	UpstreamPort    int32
+	Weight          int32
+}
+
+func (q *Queries) GetWorkerPoolConfig(ctx context.Context, id uuid.UUID) ([]GetWorkerPoolConfigRow, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkerPoolConfig, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetWorkerPoolConfigRow
+	for rows.Next() {
+		var i GetWorkerPoolConfigRow
+		if err := rows.Scan(
+			&i.WorkerName,
+			&i.PoolID,
+			&i.PoolTag,
+			&i.PoolPort,
+			&i.PoolSubdomain,
+			&i.UpstreamID,
+			&i.UpstreamTag,
+			&i.UpstreamAddress,
+			&i.UpstreamPort,
+			&i.Weight,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
