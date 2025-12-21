@@ -3,7 +3,6 @@ package server
 import "github.com/google/uuid"
 
 type AddWorkerRequest struct {
-	Name       *string    `json:"name"`
 	RegionName *string    `json:"region_name"`
 	IPAddress  *string    `json:"ip_address"`
 	Port       *int32     `json:"port"`

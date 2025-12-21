@@ -28,7 +28,7 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) (sql.Result, error)
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) (sql.Result, error)
-	DeleteWorkerByName(ctx context.Context, name string) error
+	DeleteWorkerByName(ctx context.Context, name string) (sql.Result, error)
 	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error
 	GenerateproxyString(ctx context.Context, arg GenerateproxyStringParams) (GenerateproxyStringRow, error)
 	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)

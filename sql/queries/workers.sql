@@ -1,6 +1,6 @@
 -- name: CreateWorker :one
-INSERT INTO worker (name, region_id, ip_address, port, pool_id)
-VALUES ($1,(SELECT id from region where region.name = $2), $3, $4, $5)
+INSERT INTO worker (id,region_id,name,ip_address, port, pool_id)
+VALUES ($1,(SELECT id from region where region.name = sqlc.arg('region_name')), $2, $3, $4,$5)
 RETURNING *;
 
 -- name: GetAllWorkers :many
@@ -38,7 +38,7 @@ LEFT JOIN worker_domains wd ON w.id = wd.worker_id
 WHERE w.name = $1
 GROUP BY w.id, r.name;
 
--- name: DeleteWorkerByName :exec
+-- name: DeleteWorkerByName :execresult
 DELETE FROM worker WHERE name = $1;
 
 -- name: AddWorkerDomain :one

@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,26 +33,28 @@ func (q *Queries) AddWorkerDomain(ctx context.Context, arg AddWorkerDomainParams
 }
 
 const createWorker = `-- name: CreateWorker :one
-INSERT INTO worker (name, region_id, ip_address, port, pool_id)
-VALUES ($1,(SELECT id from region where region.name = $2), $3, $4, $5)
+INSERT INTO worker (id,region_id,name,ip_address, port, pool_id)
+VALUES ($1,(SELECT id from region where region.name = $6), $2, $3, $4,$5)
 RETURNING id, name, region_id, ip_address, port, status, pool_id, last_seen, created_at
 `
 
 type CreateWorkerParams struct {
-	Name      string
-	Name_2    string
-	IpAddress string
-	Port      int32
-	PoolID    uuid.UUID
+	ID         uuid.UUID
+	Name       string
+	IpAddress  string
+	Port       int32
+	PoolID     uuid.UUID
+	RegionName string
 }
 
 func (q *Queries) CreateWorker(ctx context.Context, arg CreateWorkerParams) (Worker, error) {
 	row := q.db.QueryRowContext(ctx, createWorker,
+		arg.ID,
 		arg.Name,
-		arg.Name_2,
 		arg.IpAddress,
 		arg.Port,
 		arg.PoolID,
+		arg.RegionName,
 	)
 	var i Worker
 	err := row.Scan(
@@ -68,13 +71,12 @@ func (q *Queries) CreateWorker(ctx context.Context, arg CreateWorkerParams) (Wor
 	return i, err
 }
 
-const deleteWorkerByName = `-- name: DeleteWorkerByName :exec
+const deleteWorkerByName = `-- name: DeleteWorkerByName :execresult
 DELETE FROM worker WHERE name = $1
 `
 
-func (q *Queries) DeleteWorkerByName(ctx context.Context, name string) error {
-	_, err := q.db.ExecContext(ctx, deleteWorkerByName, name)
-	return err
+func (q *Queries) DeleteWorkerByName(ctx context.Context, name string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteWorkerByName, name)
 }
 
 const deleteWorkerDomain = `-- name: DeleteWorkerDomain :exec

@@ -1,13 +1,11 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
@@ -15,15 +13,11 @@ import (
 )
 
 type PoolHandler struct {
-	Queries *repository.Queries
-	DB      *sql.DB
 	Service service.PoolService
 }
 
-func NewPoolHandler(queries *repository.Queries, db *sql.DB, service service.PoolService) *PoolHandler {
+func NewPoolHandler(service service.PoolService) *PoolHandler {
 	return &PoolHandler{
-		Queries: queries,
-		DB:      db,
 		Service: service,
 	}
 }

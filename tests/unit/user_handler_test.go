@@ -21,7 +21,7 @@ func TestCreateUser_Handler(t *testing.T) {
 
 	mockService := new(mocks.MockUserService)
 
-	h := handlers.NewUserHandler(nil, nil, mockService)
+	h := handlers.NewUserHandler(mockService)
 
 	router := h.TestRoutes()
 

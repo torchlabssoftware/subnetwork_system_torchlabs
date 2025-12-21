@@ -18,17 +18,19 @@ import (
 )
 
 type WorkerHandler struct {
-	queries   *repository.Queries
-	db        *sql.DB
-	wsManager *wsm.WebsocketManager
-	analytics service.AnalyticsService
+	queries       *repository.Queries
+	db            *sql.DB
+	wsManager     *wsm.WebsocketManager
+	analytics     service.AnalyticsService
+	workerService service.WorkerService
 }
 
-func NewWorkerHandler(q *repository.Queries, db *sql.DB, analytics service.AnalyticsService) *WorkerHandler {
+func NewWorkerHandler(q *repository.Queries, db *sql.DB, analytics service.AnalyticsService, workerService service.WorkerService) *WorkerHandler {
 	w := &WorkerHandler{
-		queries:   q,
-		db:        db,
-		analytics: analytics,
+		queries:       q,
+		db:            db,
+		analytics:     analytics,
+		workerService: workerService,
 	}
 	w.wsManager = wsm.NewWebsocketManager(q, analytics)
 	return w
@@ -102,10 +104,6 @@ func (wh *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == nil || *req.Name == "" {
-		functions.RespondwithError(w, http.StatusBadRequest, "Name is required", fmt.Errorf("name is required"))
-		return
-	}
 	if req.RegionName == nil || *req.RegionName == "" {
 		functions.RespondwithError(w, http.StatusBadRequest, "RegionName is required", fmt.Errorf("region_name is required"))
 		return
@@ -123,59 +121,24 @@ func (wh *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	worker, err := wh.queries.CreateWorker(r.Context(), repository.CreateWorkerParams{
-		Name:      *req.Name,
-		Name_2:    *req.RegionName,
-		IpAddress: *req.IPAddress,
-		Port:      *req.Port,
-		PoolID:    *req.PoolId,
-	})
+	worker, code, message, err := wh.workerService.CreateWorker(r.Context(), &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to create worker", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := server.AddWorkerResponse{
-		ID:         worker.ID.String(),
-		Name:       worker.Name,
-		RegionName: *req.RegionName,
-		IpAddress:  worker.IpAddress,
-		Status:     worker.Status,
-		Port:       worker.Port,
-		PoolId:     worker.PoolID,
-		LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
-		CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
-		Domains:    []string{},
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, resp)
+	functions.RespondwithJSON(w, code, worker)
 
 }
 
 func (wh *WorkerHandler) GetAllWorkers(w http.ResponseWriter, r *http.Request) {
-	workers, err := wh.queries.GetAllWorkers(r.Context())
+	workers, code, message, err := wh.workerService.GetWorkers(r.Context())
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get workers", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := []server.AddWorkerResponse{}
-	for _, worker := range workers {
-		resp = append(resp, server.AddWorkerResponse{
-			ID:         worker.ID.String(),
-			Name:       worker.Name,
-			RegionName: worker.RegionName,
-			IpAddress:  worker.IpAddress,
-			Status:     worker.Status,
-			Port:       worker.Port,
-			PoolId:     worker.PoolID,
-			LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
-			CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
-			Domains:    worker.Domains,
-		})
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, code, workers)
 }
 
 func (wh *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request) {
@@ -185,30 +148,13 @@ func (wh *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	worker, err := wh.queries.GetWorkerByName(r.Context(), name)
+	worker, code, message, err := wh.workerService.GetWorkerByName(r.Context(), name)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			functions.RespondwithError(w, http.StatusNotFound, "Worker not found", err)
-			return
-		}
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get worker", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := server.AddWorkerResponse{
-		ID:         worker.ID.String(),
-		Name:       worker.Name,
-		RegionName: worker.RegionName,
-		IpAddress:  worker.IpAddress,
-		Status:     worker.Status,
-		Port:       worker.Port,
-		PoolId:     worker.PoolID,
-		LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
-		CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
-		Domains:    worker.Domains,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, code, worker)
 }
 
 func (wh *WorkerHandler) DeleteWorker(w http.ResponseWriter, r *http.Request) {
@@ -218,13 +164,19 @@ func (wh *WorkerHandler) DeleteWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := wh.queries.DeleteWorkerByName(r.Context(), name)
+	code, message, err := wh.workerService.DeleteWorker(r.Context(), name)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete worker", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusOK, map[string]string{"message": "Worker deleted successfully"})
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: message,
+	}
+
+	functions.RespondwithJSON(w, code, res)
 }
 
 func (wh *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request) {
