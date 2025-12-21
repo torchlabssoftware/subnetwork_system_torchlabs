@@ -135,12 +135,12 @@ type UpdatePoolRequest struct {
 }
 
 type AddPoolUpstreamWeightRequest struct {
-	PoolTag     string `json:"pool_tag"`
-	UpstreamTag string `json:"upstream_tag"`
-	Weight      int32  `json:"weight"`
+	PoolTag     *string `json:"pool_tag"`
+	UpstreamTag *string `json:"upstream_tag"`
+	Weight      *int32  `json:"weight"`
 }
 
 type DeletePoolUpstreamWeightRequest struct {
-	PoolTag     string `json:"pool_tag"`
-	UpstreamTag string `json:"upstream_tag"`
+	PoolTag     *string `json:"pool_tag"`
+	UpstreamTag *string `json:"upstream_tag"`
 }

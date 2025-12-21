@@ -348,27 +348,21 @@ func (p *PoolHandler) addPoolUpstreamWeight(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if req.PoolTag == "" || req.UpstreamTag == "" || req.Weight == 0 {
+	if (req.PoolTag == nil || *req.PoolTag == "") || (req.UpstreamTag == nil || *req.UpstreamTag == "") || (req.Weight == nil || *req.Weight == 0) {
 		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag, Upstream Tag and Weight are required", fmt.Errorf("missing fields"))
 		return
 	}
 
-	args := repository.AddPoolUpstreamWeightParams{
-		Tag:    req.PoolTag,
-		Tag_2:  req.UpstreamTag,
-		Weight: req.Weight,
-	}
-
-	_, err := p.Queries.AddPoolUpstreamWeight(r.Context(), args)
+	code, message, err := p.Service.AddPoolUpstreamWeight(r.Context(), req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to add upstream weight", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
 	res := struct {
 		Message string `json:"message"`
 	}{
-		Message: "added",
+		Message: message,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -381,26 +375,21 @@ func (p *PoolHandler) deletePoolUpstreamWeight(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if req.PoolTag == "" || req.UpstreamTag == "" {
+	if (req.PoolTag == nil || *req.PoolTag == "") || (req.UpstreamTag == nil || *req.UpstreamTag == "") {
 		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag and Upstream Tag are required", fmt.Errorf("missing fields"))
 		return
 	}
 
-	args := repository.DeletePoolUpstreamWeightParams{
-		Tag:   req.PoolTag,
-		Tag_2: req.UpstreamTag,
-	}
-
-	err := p.Queries.DeletePoolUpstreamWeight(r.Context(), args)
+	code, message, err := p.Service.DeletePoolUpstreamWeight(r.Context(), req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete upstream weight", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
 	res := struct {
 		Message string `json:"message"`
 	}{
-		Message: "deleted",
+		Message: message,
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)

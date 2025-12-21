@@ -133,7 +133,7 @@ func (q *Queries) DeletePool(ctx context.Context, tag string) (sql.Result, error
 	return q.db.ExecContext(ctx, deletePool, tag)
 }
 
-const deletePoolUpstreamWeight = `-- name: DeletePoolUpstreamWeight :exec
+const deletePoolUpstreamWeight = `-- name: DeletePoolUpstreamWeight :execresult
 DELETE FROM pool_upstream_weight
 WHERE pool_id = (SELECT p.id FROM pool p WHERE p.tag = $1)
   AND upstream_id = (SELECT u.id FROM upstream u WHERE u.tag = $2)
@@ -144,9 +144,8 @@ type DeletePoolUpstreamWeightParams struct {
 	Tag_2 string
 }
 
-func (q *Queries) DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error {
-	_, err := q.db.ExecContext(ctx, deletePoolUpstreamWeight, arg.Tag, arg.Tag_2)
-	return err
+func (q *Queries) DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deletePoolUpstreamWeight, arg.Tag, arg.Tag_2)
 }
 
 const deleteRegion = `-- name: DeleteRegion :exec

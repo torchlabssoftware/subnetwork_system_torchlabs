@@ -97,7 +97,7 @@ VALUES (
 )
 RETURNING *;
 
--- name: DeletePoolUpstreamWeight :exec
+-- name: DeletePoolUpstreamWeight :execresult
 DELETE FROM pool_upstream_weight
 WHERE pool_id = (SELECT p.id FROM pool p WHERE p.tag = $1)
   AND upstream_id = (SELECT u.id FROM upstream u WHERE u.tag = $2);

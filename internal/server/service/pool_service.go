@@ -27,6 +27,8 @@ type PoolService interface {
 	CreatePool(ctx context.Context, req models.CreatePoolRequest) (models.CreatePoolResponce, int, string, error)
 	UpdatePool(ctx context.Context, tag string, req models.UpdatePoolRequest) (models.CreatePoolResponce, int, string, error)
 	DeletePool(ctx context.Context, tag string) (int, string, error)
+	AddPoolUpstreamWeight(ctx context.Context, req models.AddPoolUpstreamWeightRequest) (int, string, error)
+	DeletePoolUpstreamWeight(ctx context.Context, req models.DeletePoolUpstreamWeightRequest) (int, string, error)
 }
 
 type PoolServiceImpl struct {
@@ -400,6 +402,38 @@ func (s *PoolServiceImpl) DeletePool(ctx context.Context, tag string) (int, stri
 	result, err := s.Queries.DeletePool(ctx, tag)
 	if err != nil {
 		return http.StatusInternalServerError, "Failed to delete pool", err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Println(rowsAffected)
+	if rowsAffected == 0 {
+		return http.StatusNotFound, "Nothing deleted", nil
+	}
+	return http.StatusOK, "deleted", nil
+}
+
+func (s *PoolServiceImpl) AddPoolUpstreamWeight(ctx context.Context, req models.AddPoolUpstreamWeightRequest) (int, string, error) {
+	args := repository.AddPoolUpstreamWeightParams{
+		Tag:    *req.PoolTag,
+		Tag_2:  *req.UpstreamTag,
+		Weight: *req.Weight,
+	}
+
+	_, err := s.Queries.AddPoolUpstreamWeight(ctx, args)
+	if err != nil {
+		return http.StatusInternalServerError, "Failed to add upstream weight", err
+	}
+	return http.StatusCreated, "added", nil
+}
+
+func (s *PoolServiceImpl) DeletePoolUpstreamWeight(ctx context.Context, req models.DeletePoolUpstreamWeightRequest) (int, string, error) {
+	args := repository.DeletePoolUpstreamWeightParams{
+		Tag:   *req.PoolTag,
+		Tag_2: *req.UpstreamTag,
+	}
+
+	result, err := s.Queries.DeletePoolUpstreamWeight(ctx, args)
+	if err != nil {
+		return http.StatusInternalServerError, "Failed to delete upstream weight", err
 	}
 	rowsAffected, _ := result.RowsAffected()
 	log.Println(rowsAffected)

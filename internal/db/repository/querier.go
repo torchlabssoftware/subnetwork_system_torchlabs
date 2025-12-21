@@ -22,7 +22,7 @@ type Querier interface {
 	CreateWorker(ctx context.Context, arg CreateWorkerParams) (Worker, error)
 	DeleteCountry(ctx context.Context, name string) error
 	DeletePool(ctx context.Context, tag string) (sql.Result, error)
-	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error
+	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) (sql.Result, error)
 	DeleteRegion(ctx context.Context, name string) error
 	DeleteUpstreamByTag(ctx context.Context, tag string) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
