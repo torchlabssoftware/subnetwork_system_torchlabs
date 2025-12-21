@@ -15,6 +15,8 @@ type WorkerService interface {
 	GetWorkers(ctx context.Context) (res []server.AddWorkerResponse, code int, message string, err error)
 	GetWorkerByName(ctx context.Context, name string) (res *server.AddWorkerResponse, code int, message string, err error)
 	DeleteWorker(ctx context.Context, name string) (code int, message string, err error)
+	AddWorkerDomain(ctx context.Context, name string, req *server.AddWorkerDomainRequest) (code int, message string, err error)
+	DeleteWorkerDomain(ctx context.Context, name string, req *server.DeleteWorkerDomainRequest) (code int, message string, err error)
 }
 
 type workerService struct {
@@ -129,4 +131,33 @@ func (s *workerService) DeleteWorker(ctx context.Context, name string) (code int
 		return http.StatusNotFound, "Worker not found", nil
 	}
 	return http.StatusOK, "worker deleted successfully", nil
+}
+
+func (s *workerService) AddWorkerDomain(ctx context.Context, name string, req *server.AddWorkerDomainRequest) (code int, message string, err error) {
+	_, err = s.queries.AddWorkerDomain(ctx, repository.AddWorkerDomainParams{
+		Name:    name,
+		Column2: req.Domain,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return http.StatusNotFound, "Worker not found", err
+		}
+		return http.StatusInternalServerError, "Failed to add domain", err
+	}
+	return http.StatusCreated, "Domains added successfully", nil
+}
+
+func (s *workerService) DeleteWorkerDomain(ctx context.Context, name string, req *server.DeleteWorkerDomainRequest) (code int, message string, err error) {
+	result, err := s.queries.DeleteWorkerDomain(ctx, repository.DeleteWorkerDomainParams{
+		Name:    name,
+		Column2: req.Domain,
+	})
+	if err != nil {
+		return http.StatusInternalServerError, "Failed to delete domain", err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return http.StatusNotFound, "No domains deleted", nil
+	}
+	return http.StatusOK, "Domain deleted successfully", nil
 }

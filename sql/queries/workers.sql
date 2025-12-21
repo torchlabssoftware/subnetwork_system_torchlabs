@@ -46,15 +46,13 @@ INSERT INTO worker_domains (worker_id, domain)
 VALUES ((SELECT id FROM worker WHERE name = $1), UNNEST($2::TEXT[]))
 RETURNING *;
 
--- name: DeleteWorkerDomain :exec
+-- name: DeleteWorkerDomain :execresult
 DELETE FROM worker_domains
 WHERE worker_id = (SELECT id FROM worker WHERE name = $1) AND domain = ANY($2::TEXT[]);
 
 -- name: GetWorkerById :one
 SELECT w.id FROM worker w
 WHERE w.id = $1;
-
-
 
 -- name: GetWorkerPoolConfig :many
 SELECT 

@@ -197,20 +197,13 @@ func (wh *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err := wh.queries.AddWorkerDomain(r.Context(), repository.AddWorkerDomainParams{
-		Name:    name,
-		Column2: req.Domain,
-	})
+	code, message, err := wh.workerService.AddWorkerDomain(r.Context(), name, &req)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			functions.RespondwithError(w, http.StatusNotFound, "Worker not found", err)
-			return
-		}
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to add domain", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusCreated, map[string]string{"message": "Domains added successfully"})
+	functions.RespondwithJSON(w, code, map[string]string{"message": message})
 }
 
 func (wh *WorkerHandler) DeleteWorkerDomain(w http.ResponseWriter, r *http.Request) {
@@ -231,14 +224,11 @@ func (wh *WorkerHandler) DeleteWorkerDomain(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err := wh.queries.DeleteWorkerDomain(r.Context(), repository.DeleteWorkerDomainParams{
-		Name:    name,
-		Column2: req.Domain,
-	})
+	code, message, err := wh.workerService.DeleteWorkerDomain(r.Context(), name, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete domain", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusOK, map[string]string{"message": "Domain deleted successfully"})
+	functions.RespondwithJSON(w, code, map[string]string{"message": message})
 }

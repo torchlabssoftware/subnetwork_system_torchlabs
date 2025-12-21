@@ -29,7 +29,7 @@ type Querier interface {
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) (sql.Result, error)
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) (sql.Result, error)
 	DeleteWorkerByName(ctx context.Context, name string) (sql.Result, error)
-	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error
+	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) (sql.Result, error)
 	GenerateproxyString(ctx context.Context, arg GenerateproxyStringParams) (GenerateproxyStringRow, error)
 	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)

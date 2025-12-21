@@ -79,7 +79,7 @@ func (q *Queries) DeleteWorkerByName(ctx context.Context, name string) (sql.Resu
 	return q.db.ExecContext(ctx, deleteWorkerByName, name)
 }
 
-const deleteWorkerDomain = `-- name: DeleteWorkerDomain :exec
+const deleteWorkerDomain = `-- name: DeleteWorkerDomain :execresult
 DELETE FROM worker_domains
 WHERE worker_id = (SELECT id FROM worker WHERE name = $1) AND domain = ANY($2::TEXT[])
 `
@@ -89,9 +89,8 @@ type DeleteWorkerDomainParams struct {
 	Column2 []string
 }
 
-func (q *Queries) DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error {
-	_, err := q.db.ExecContext(ctx, deleteWorkerDomain, arg.Name, pq.Array(arg.Column2))
-	return err
+func (q *Queries) DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteWorkerDomain, arg.Name, pq.Array(arg.Column2))
 }
 
 const getAllWorkers = `-- name: GetAllWorkers :many
