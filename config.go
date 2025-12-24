@@ -5,6 +5,9 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+
+	"github.com/snail007/goproxy/manager/env"
+	captain "github.com/snail007/goproxy/manager/websocket"
 	"github.com/snail007/goproxy/services"
 	"github.com/snail007/goproxy/utils"
 
@@ -12,11 +15,14 @@ import (
 )
 
 var (
-	app     *kingpin.Application
-	service *services.ServiceItem
+	app       *kingpin.Application
+	service   *services.ServiceItem
+	envConfig env.EnvConfig
 )
 
 func initConfig() (err error) {
+	envConfig = env.Load()
+
 	//keygen
 	if len(os.Args) > 1 {
 		if os.Args[1] == "keygen" {
@@ -40,6 +46,10 @@ func initConfig() (err error) {
 	args.Local = app.Flag("local", "local ip:port to listen").Short('p').Default(":33080").String()
 	certTLS := app.Flag("cert", "cert file for tls").Short('C').Default("proxy.crt").String()
 	keyTLS := app.Flag("key", "key file for tls").Short('K').Default("proxy.key").String()
+
+	// Captain Server Configuration
+	captainURL := envConfig.CaptainURL
+	workerID := app.Flag("worker-id", "Worker ID UUID").String()
 
 	//########http#########
 	http := app.Command("http", "proxy on http mode")
@@ -91,6 +101,15 @@ func initConfig() (err error) {
 
 	if *certTLS != "" && *keyTLS != "" {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
+	}
+
+	// Start Captain Client if configured
+	if captainURL != "" && *workerID != "" {
+		log.Printf("Starting Captain Client (URL: %s, WorkerID: %s)", captainURL, *workerID)
+		client := captain.NewCaptainClient(captainURL, *workerID, envConfig.APIKey)
+		client.Start()
+	} else {
+		log.Println("Captain Client not configured (missing captain-url or worker-id)")
 	}
 
 	//common args
