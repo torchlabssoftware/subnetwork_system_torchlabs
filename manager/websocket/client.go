@@ -132,15 +132,6 @@ func (c *CaptainClient) login() (string, error) {
 	return loginResp.Otp, nil
 }
 
-func (c *CaptainClient) Send(event Event) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.Conn == nil {
-		return fmt.Errorf("not connected")
-	}
-	return c.Conn.WriteJSON(event)
-}
-
 func (c *CaptainClient) handleEvent(event Event) {
 	log.Printf("[Captain] Received event: %s", event.Type)
 
@@ -154,6 +145,15 @@ func (c *CaptainClient) handleEvent(event Event) {
 	default:
 		log.Printf("[Captain] Unhandled event type: %s", event.Type)
 	}
+}
+
+func (c *CaptainClient) Send(event Event) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.Conn == nil {
+		return fmt.Errorf("not connected")
+	}
+	return c.Conn.WriteJSON(event)
 }
 
 func (c *CaptainClient) VerifyUser(user, pass string) bool {
@@ -199,6 +199,11 @@ func (c *CaptainClient) processVerifyUserResponse(payload interface{}) {
 
 	if ch, ok := c.pendingValidations.Load(resp.Payload.Username); ok {
 		ch.(chan bool) <- resp.Success
+		if resp.Success {
+			c.users[resp.Payload.Username] = &resp.Payload
+			return
+		}
+		delete(c.users, resp.Payload.Username)
 	}
 }
 

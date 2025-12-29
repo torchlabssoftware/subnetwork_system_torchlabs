@@ -221,9 +221,12 @@ func (ba *BasicAuth) Check(userpass string) (ok bool) {
 			return p.(string) == u[1]
 		}
 
-		// Fallback to external validator if set
 		if ba.Validator != nil {
-			return ba.Validator(u[0], u[1])
+			isValid := ba.Validator(u[0], u[1])
+			if isValid {
+				ba.data.Set(u[0], u[1])
+			}
+			return isValid
 		}
 	}
 	return

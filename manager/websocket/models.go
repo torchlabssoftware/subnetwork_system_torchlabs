@@ -1,8 +1,6 @@
 package websocket
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 )
 
@@ -37,10 +35,10 @@ type UpstreamConfig struct {
 }
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	Password    string    `json:"password"`
+	Status      string    `json:"status"`
+	IpWhitelist []string  `json:"ip_whitelist"`
+	Pools       []string  `json:"pools"`
 }
