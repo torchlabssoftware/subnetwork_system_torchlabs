@@ -34,6 +34,7 @@ func initConfig() (err error) {
 	//define  args
 	tcpArgs := services.TCPArgs{}
 	httpArgs := services.HTTPArgs{}
+	socksArgs := services.SOCKSArgs{}
 	tunnelServerArgs := services.TunnelServerArgs{}
 	tunnelClientArgs := services.TunnelClientArgs{}
 	tunnelBridgeArgs := services.TunnelBridgeArgs{}
@@ -65,6 +66,20 @@ func initConfig() (err error) {
 	httpArgs.Auth = http.Flag("auth", "http basic auth username and password, mutiple user repeat -a ,such as: -a user1:pass1 -a user2:pass2").Short('a').Strings()
 	httpArgs.PoolSize = http.Flag("pool-size", "conn pool size , which connect to parent proxy, zero: means turn off pool").Short('L').Default("20").Int()
 	httpArgs.CheckParentInterval = http.Flag("check-parent-interval", "check if proxy is okay every interval seconds,zero: means no check").Short('I').Default("3").Int()
+
+	//########socks#########
+	socks := app.Command("socks", "proxy on socks5 mode")
+	socksArgs.LocalType = socks.Flag("local-type", "local protocol type <tls|tcp>").Default("tcp").Short('t').Enum("tls", "tcp")
+	socksArgs.ParentType = socks.Flag("parent-type", "parent protocol type <tls|tcp>").Short('T').Enum("tls", "tcp")
+	socksArgs.Always = socks.Flag("always", "always use parent proxy").Default("false").Bool()
+	socksArgs.Timeout = socks.Flag("timeout", "tcp timeout milliseconds when connect to real server or parent proxy").Default("2000").Int()
+	socksArgs.Interval = socks.Flag("interval", "check domain if blocked every interval seconds").Default("10").Int()
+	socksArgs.Blocked = socks.Flag("blocked", "blocked domain file , one domain each line").Default("blocked").Short('b').String()
+	socksArgs.Direct = socks.Flag("direct", "direct domain file , one domain each line").Default("direct").Short('d').String()
+	socksArgs.AuthFile = socks.Flag("auth-file", "socks5 auth file,\"username:password\" each line in file").Short('F').String()
+	socksArgs.Auth = socks.Flag("auth", "socks5 auth username and password, mutiple user repeat -a ,such as: -a user1:pass1 -a user2:pass2").Short('a').Strings()
+	socksArgs.PoolSize = socks.Flag("pool-size", "conn pool size , which connect to parent proxy, zero: means turn off pool").Short('L').Default("20").Int()
+	socksArgs.CheckParentInterval = socks.Flag("check-parent-interval", "check if proxy is okay every interval seconds,zero: means no check").Short('I').Default("3").Int()
 
 	//########tcp#########
 	tcp := app.Command("tcp", "proxy on tcp mode")
@@ -115,6 +130,7 @@ func initConfig() (err error) {
 
 	//common args
 	httpArgs.Args = args
+	socksArgs.Args = args
 	tcpArgs.Args = args
 	udpArgs.Args = args
 	tunnelBridgeArgs.Args = args
@@ -125,6 +141,7 @@ func initConfig() (err error) {
 	//regist services and run service
 	serviceName := kingpin.MustParse(app.Parse(os.Args[1:]))
 	services.Regist("http", services.NewHTTP(), httpArgs)
+	services.Regist("socks", services.NewSOCKS(), socksArgs)
 	services.Regist("tcp", services.NewTCP(), tcpArgs)
 	services.Regist("udp", services.NewUDP(), udpArgs)
 	services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)

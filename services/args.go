@@ -8,6 +8,7 @@ const (
 	TYPE_UDP     = "udp"
 	TYPE_HTTP    = "http"
 	TYPE_TLS     = "tls"
+	TYPE_SOCKS   = "socks"
 	CONN_CONTROL = uint8(1)
 	CONN_SERVER  = uint8(2)
 	CONN_CLIENT  = uint8(3)
@@ -59,6 +60,22 @@ type HTTPArgs struct {
 	PoolSize            *int
 	CheckParentInterval *int
 }
+
+type SOCKSArgs struct {
+	Args
+	Always              *bool
+	Interval            *int
+	Blocked             *string
+	Direct              *string
+	AuthFile            *string
+	Auth                *[]string
+	ParentType          *string
+	LocalType           *string
+	Timeout             *int
+	PoolSize            *int
+	CheckParentInterval *int
+}
+
 type UDPArgs struct {
 	Args
 	ParentType          *string
