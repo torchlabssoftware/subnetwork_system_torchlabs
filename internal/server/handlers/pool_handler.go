@@ -182,7 +182,7 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if (req.UpstreamProvider == nil || *req.UpstreamProvider == "") ||
-		(req.Format == nil || *req.Format == "") ||
+		(req.ConfigFormat == nil || *req.ConfigFormat == "") ||
 		(req.Tag == nil || *req.Tag == "") ||
 		req.Port == nil ||
 		(req.Domain == nil || *req.Domain == "") {

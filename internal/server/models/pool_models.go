@@ -65,7 +65,9 @@ type GetUpstreamResponce struct {
 type CreateUpstreamRequest struct {
 	Tag              *string `json:"tag"`
 	UpstreamProvider *string `json:"upstream_provider"`
-	Format           *string `json:"format"`
+	ConfigFormat     *string `json:"config_format"`
+	Username         *string `json:"username"`
+	Password         *string `json:"password"`
 	Port             *int    `json:"port"`
 	Domain           *string `json:"domain"`
 }
@@ -74,7 +76,9 @@ type CreateUpstreamResponce struct {
 	Id               uuid.UUID `json:"id"`
 	Tag              string    `json:"tag"`
 	UpstreamProvider string    `json:"upstream_provider"`
-	Format           string    `json:"format"`
+	ConfigFormat     string    `json:"config_format"`
+	Username         string    `json:"username"`
+	Password         string    `json:"password"`
 	Port             int       `json:"port"`
 	Domain           string    `json:"domain"`
 	CreatedAt        time.Time `json:"created_at"`
@@ -114,10 +118,12 @@ type CreatePoolResponce struct {
 }
 
 type PoolUpstream struct {
-	Tag    string `json:"tag"`
-	Format string `json:"format"`
-	Port   int32  `json:"port"`
-	Domain string `json:"domain"`
+	Tag          string `json:"tag"`
+	ConfigFormat string `json:"config_format"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	Port         int32  `json:"port"`
+	Domain       string `json:"domain"`
 }
 
 type GetPoolsResponse struct {

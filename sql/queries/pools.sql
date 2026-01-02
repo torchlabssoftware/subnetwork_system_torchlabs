@@ -26,8 +26,8 @@ where c.name = $1;
 SELECT * FROM upstream;
 
 -- name: AddUpstream :one
-INSERT INTO upstream(tag,upstream_provider,format,port,domain)
-VALUES($1,$2,$3,$4,$5)
+INSERT INTO upstream(tag,upstream_provider,config_format,username,password,port,domain)
+VALUES($1,$2,$3,$4,$5,$6,$7)
 RETURNING *;
 
 -- name: DeleteUpstreamByTag :exec
@@ -52,7 +52,9 @@ SELECT
     p.subdomain AS pool_subdomain,
     p.port AS pool_port,
     u.tag AS upstream_tag,
-    u.format AS upstream_format,
+    u.config_format AS config_format,
+    u.username AS username,
+    u.password AS password,
     u.port AS upstream_port,
     u.domain AS upstream_domain
 FROM pool p
@@ -66,7 +68,9 @@ SELECT
     p.subdomain AS pool_subdomain,
     p.port AS pool_port,
     u.tag AS upstream_tag,
-    u.format AS upstream_format,
+    u.config_format AS config_format,
+    u.username AS username,
+    u.password AS password,
     u.port AS upstream_port,
     u.domain AS upstream_domain
 FROM pool p

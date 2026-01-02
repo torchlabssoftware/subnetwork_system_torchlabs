@@ -76,7 +76,6 @@ func (w *Worker) ReadMessage() {
 
 func (w *Worker) WriteMessage() {
 	defer func() {
-		close(w.egress)
 		w.Connection.Close()
 		w.Manager.RemoveWorker(w)
 	}()

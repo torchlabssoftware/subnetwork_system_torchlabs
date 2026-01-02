@@ -58,7 +58,9 @@ CREATE TABLE upstream (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tag TEXT NOT NULL UNIQUE,
     upstream_provider TEXT NOT NULL,
-    format TEXT NOT NULL,
+    username TEXT NOT NULL,
+    password TEXT NOT NULL,
+    config_format TEXT NOT NULL,
     port INT NOT NULL,
     domain TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -230,7 +230,9 @@ SELECT
     u.tag AS upstream_tag,
     u.domain AS upstream_address,
     u.port AS upstream_port,
-    u.format As upstream_format,
+    u.config_format As config_format,
+    u.username AS username,
+    u.password AS password,
     u.upstream_provider AS upstream_provider,
     puw.weight
 FROM worker w
@@ -250,7 +252,9 @@ type GetWorkerPoolConfigRow struct {
 	UpstreamTag      string
 	UpstreamAddress  string
 	UpstreamPort     int32
-	UpstreamFormat   string
+	ConfigFormat     string
+	Username         string
+	Password         string
 	UpstreamProvider string
 	Weight           int32
 }
@@ -274,7 +278,9 @@ func (q *Queries) GetWorkerPoolConfig(ctx context.Context, id uuid.UUID) ([]GetW
 			&i.UpstreamTag,
 			&i.UpstreamAddress,
 			&i.UpstreamPort,
-			&i.UpstreamFormat,
+			&i.ConfigFormat,
+			&i.Username,
+			&i.Password,
 			&i.UpstreamProvider,
 			&i.Weight,
 		); err != nil {

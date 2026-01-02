@@ -232,7 +232,9 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 		config.Upstreams = append(config.Upstreams, UpstreamConfig{
 			UpstreamID:       row.UpstreamID,
 			UpstreamTag:      row.UpstreamTag,
-			UpstreamFormat:   row.UpstreamFormat,
+			UpstreamFormat:   row.ConfigFormat,
+			UpstreamUsername: row.Username,
+			UpstreamPassword: row.Password,
 			UpstreamHost:     row.UpstreamAddress,
 			UpstreamPort:     int(row.UpstreamPort),
 			UpstreamProvider: row.UpstreamProvider,

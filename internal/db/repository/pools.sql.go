@@ -80,15 +80,17 @@ func (q *Queries) AddRegion(ctx context.Context, name string) (Region, error) {
 }
 
 const addUpstream = `-- name: AddUpstream :one
-INSERT INTO upstream(tag,upstream_provider,format,port,domain)
-VALUES($1,$2,$3,$4,$5)
-RETURNING id, tag, upstream_provider, format, port, domain, created_at
+INSERT INTO upstream(tag,upstream_provider,config_format,username,password,port,domain)
+VALUES($1,$2,$3,$4,$5,$6,$7)
+RETURNING id, tag, upstream_provider, username, password, config_format, port, domain, created_at
 `
 
 type AddUpstreamParams struct {
 	Tag              string
 	UpstreamProvider string
-	Format           string
+	ConfigFormat     string
+	Username         string
+	Password         string
 	Port             int32
 	Domain           string
 }
@@ -97,7 +99,9 @@ func (q *Queries) AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstr
 	row := q.db.QueryRowContext(ctx, addUpstream,
 		arg.Tag,
 		arg.UpstreamProvider,
-		arg.Format,
+		arg.ConfigFormat,
+		arg.Username,
+		arg.Password,
 		arg.Port,
 		arg.Domain,
 	)
@@ -106,7 +110,9 @@ func (q *Queries) AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstr
 		&i.ID,
 		&i.Tag,
 		&i.UpstreamProvider,
-		&i.Format,
+		&i.Username,
+		&i.Password,
+		&i.ConfigFormat,
 		&i.Port,
 		&i.Domain,
 		&i.CreatedAt,
@@ -208,7 +214,9 @@ SELECT
     p.subdomain AS pool_subdomain,
     p.port AS pool_port,
     u.tag AS upstream_tag,
-    u.format AS upstream_format,
+    u.config_format AS config_format,
+    u.username AS username,
+    u.password AS password,
     u.port AS upstream_port,
     u.domain AS upstream_domain
 FROM pool p
@@ -223,7 +231,9 @@ type GetPoolByTagWithUpstreamsRow struct {
 	PoolSubdomain  string
 	PoolPort       int32
 	UpstreamTag    sql.NullString
-	UpstreamFormat sql.NullString
+	ConfigFormat   sql.NullString
+	Username       sql.NullString
+	Password       sql.NullString
 	UpstreamPort   sql.NullInt32
 	UpstreamDomain sql.NullString
 }
@@ -243,7 +253,9 @@ func (q *Queries) GetPoolByTagWithUpstreams(ctx context.Context, tag string) ([]
 			&i.PoolSubdomain,
 			&i.PoolPort,
 			&i.UpstreamTag,
-			&i.UpstreamFormat,
+			&i.ConfigFormat,
+			&i.Username,
+			&i.Password,
 			&i.UpstreamPort,
 			&i.UpstreamDomain,
 		); err != nil {
@@ -288,7 +300,7 @@ func (q *Queries) GetRegions(ctx context.Context) ([]Region, error) {
 }
 
 const getUpstreams = `-- name: GetUpstreams :many
-SELECT id, tag, upstream_provider, format, port, domain, created_at FROM upstream
+SELECT id, tag, upstream_provider, username, password, config_format, port, domain, created_at FROM upstream
 `
 
 func (q *Queries) GetUpstreams(ctx context.Context) ([]Upstream, error) {
@@ -304,7 +316,9 @@ func (q *Queries) GetUpstreams(ctx context.Context) ([]Upstream, error) {
 			&i.ID,
 			&i.Tag,
 			&i.UpstreamProvider,
-			&i.Format,
+			&i.Username,
+			&i.Password,
+			&i.ConfigFormat,
 			&i.Port,
 			&i.Domain,
 			&i.CreatedAt,
@@ -402,7 +416,9 @@ SELECT
     p.subdomain AS pool_subdomain,
     p.port AS pool_port,
     u.tag AS upstream_tag,
-    u.format AS upstream_format,
+    u.config_format AS config_format,
+    u.username AS username,
+    u.password AS password,
     u.port AS upstream_port,
     u.domain AS upstream_domain
 FROM pool p
@@ -416,7 +432,9 @@ type ListPoolsWithUpstreamsRow struct {
 	PoolSubdomain  string
 	PoolPort       int32
 	UpstreamTag    sql.NullString
-	UpstreamFormat sql.NullString
+	ConfigFormat   sql.NullString
+	Username       sql.NullString
+	Password       sql.NullString
 	UpstreamPort   sql.NullInt32
 	UpstreamDomain sql.NullString
 }
@@ -436,7 +454,9 @@ func (q *Queries) ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUp
 			&i.PoolSubdomain,
 			&i.PoolPort,
 			&i.UpstreamTag,
-			&i.UpstreamFormat,
+			&i.ConfigFormat,
+			&i.Username,
+			&i.Password,
 			&i.UpstreamPort,
 			&i.UpstreamDomain,
 		); err != nil {

@@ -65,7 +65,9 @@ SELECT
     u.tag AS upstream_tag,
     u.domain AS upstream_address,
     u.port AS upstream_port,
-    u.format As upstream_format,
+    u.config_format As config_format,
+    u.username AS username,
+    u.password AS password,
     u.upstream_provider AS upstream_provider,
     puw.weight
 FROM worker w

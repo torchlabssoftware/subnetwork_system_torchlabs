@@ -45,7 +45,9 @@ type Upstream struct {
 	ID               uuid.UUID
 	Tag              string
 	UpstreamProvider string
-	Format           string
+	Username         string
+	Password         string
+	ConfigFormat     string
 	Port             int32
 	Domain           string
 	CreatedAt        time.Time

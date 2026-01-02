@@ -39,6 +39,8 @@ type UpstreamConfig struct {
 	UpstreamID       uuid.UUID `json:"upstream_id"`
 	UpstreamTag      string    `json:"upstream_tag"`
 	UpstreamFormat   string    `json:"upstream_format"`
+	UpstreamUsername string    `json:"upstream_username"`
+	UpstreamPassword string    `json:"upstream_password"`
 	UpstreamHost     string    `json:"upstream_host"`
 	UpstreamPort     int       `json:"upstream_port"`
 	UpstreamProvider string    `json:"upstream_provider"`

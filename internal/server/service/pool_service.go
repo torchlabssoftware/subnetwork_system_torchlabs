@@ -155,7 +155,7 @@ func (s *PoolServiceImpl) GetUpstreams(ctx context.Context) ([]models.GetUpstrea
 			Id:               upstream.ID,
 			Tag:              upstream.Tag,
 			UpstreamProvider: upstream.UpstreamProvider,
-			Format:           upstream.Format,
+			Format:           upstream.ConfigFormat,
 			Domain:           upstream.Domain,
 			Port:             int(upstream.Port),
 			CreatedAt:        upstream.CreatedAt,
@@ -172,7 +172,9 @@ func (s *PoolServiceImpl) CreateUpstream(ctx context.Context, req models.CreateU
 	args := repository.AddUpstreamParams{
 		Tag:              *req.Tag,
 		UpstreamProvider: *req.UpstreamProvider,
-		Format:           *req.Format,
+		ConfigFormat:     *req.ConfigFormat,
+		Username:         *req.Username,
+		Password:         *req.Password,
 		Port:             int32(*req.Port),
 		Domain:           *req.Domain,
 	}
@@ -186,7 +188,9 @@ func (s *PoolServiceImpl) CreateUpstream(ctx context.Context, req models.CreateU
 		Id:               upstream.ID,
 		Tag:              upstream.Tag,
 		UpstreamProvider: upstream.UpstreamProvider,
-		Format:           upstream.Format,
+		ConfigFormat:     upstream.ConfigFormat,
+		Username:         upstream.Username,
+		Password:         upstream.Password,
 		Port:             int(upstream.Port),
 		Domain:           upstream.Domain,
 		CreatedAt:        upstream.CreatedAt,
@@ -232,10 +236,12 @@ func (s *PoolServiceImpl) GetPools(ctx context.Context) ([]models.GetPoolsRespon
 
 		if row.UpstreamTag.Valid {
 			pool.Upstreams = append(pool.Upstreams, models.PoolUpstream{
-				Tag:    row.UpstreamTag.String,
-				Format: row.UpstreamFormat.String,
-				Port:   row.UpstreamPort.Int32,
-				Domain: row.UpstreamDomain.String,
+				Tag:          row.UpstreamTag.String,
+				ConfigFormat: row.ConfigFormat.String,
+				Username:     row.Username.String,
+				Password:     row.Password.String,
+				Port:         row.UpstreamPort.Int32,
+				Domain:       row.UpstreamDomain.String,
 			})
 		}
 	}
@@ -273,10 +279,12 @@ func (s *PoolServiceImpl) GetPoolByTag(ctx context.Context, tag string) (*models
 
 		if row.UpstreamTag.Valid {
 			poolResponse.Upstreams = append(poolResponse.Upstreams, models.PoolUpstream{
-				Tag:    row.UpstreamTag.String,
-				Format: row.UpstreamFormat.String,
-				Port:   row.UpstreamPort.Int32,
-				Domain: row.UpstreamDomain.String,
+				Tag:          row.UpstreamTag.String,
+				ConfigFormat: row.ConfigFormat.String,
+				Username:     row.Username.String,
+				Password:     row.Password.String,
+				Port:         row.UpstreamPort.Int32,
+				Domain:       row.UpstreamDomain.String,
 			})
 		}
 	}
