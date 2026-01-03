@@ -1,10 +1,14 @@
 package services
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"runtime/debug"
 	"strconv"
 
@@ -123,12 +127,15 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		return
 	}
 	var outConn net.Conn
-	var _outConn interface{}
+	//var _outConn interface{}
 	if useProxy {
-		_outConn, err = s.outPool.Pool.Get()
+		/*_outConn, err = s.outPool.Pool.Get()
 		if err == nil {
 			outConn = _outConn.(net.Conn)
-		}
+		}*/
+		// For proxy chain: create fresh connection each time
+		// Pool connections don't work well for CONNECT tunnels since each tunnel consumes the connection
+		outConn, err = utils.ConnectHost(*s.cfg.Parent, *s.cfg.Timeout)
 	} else {
 		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 	}
@@ -144,7 +151,29 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	if req.IsHTTPS() && !useProxy {
 		req.HTTPSReply()
 	} else {
-		outConn.Write(req.HeadBuf)
+		httpReq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(req.HeadBuf)))
+		if err != nil {
+			utils.CloseConn(&outConn)
+			return err
+		}
+
+		// Remove client auth
+		httpReq.Header.Del("Proxy-Authorization")
+
+		user := "alice"
+		pass := "alicepass"
+
+		token := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
+
+		// Add upstream auth
+		httpReq.Header.Set("Proxy-Authorization", "Basic "+token)
+
+		var buf bytes.Buffer
+		// Use WriteProxy for sending to upstream proxy (preserves CONNECT format correctly)
+		httpReq.WriteProxy(&buf)
+
+		outConn.Write(buf.Bytes())
+
 	}
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)

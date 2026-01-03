@@ -54,7 +54,7 @@ func initConfig() (err error) {
 	//########http#########
 	http := app.Command("http", "proxy on http mode")
 	httpArgs.LocalType = http.Flag("local-type", "parent protocol type <tls|tcp>").Default("tcp").Short('t').Enum("tls", "tcp")
-	httpArgs.ParentType = http.Flag("parent-type", "parent protocol type <tls|tcp>").Short('T').Enum("tls", "tcp")
+	httpArgs.ParentType = http.Flag("parent-type", "parent protocol type <tls|tcp>").Default("tcp").Short('T').Enum("tls", "tcp")
 	httpArgs.Always = http.Flag("always", "always use parent proxy").Default("false").Bool()
 	httpArgs.Timeout = http.Flag("timeout", "tcp timeout milliseconds when connect to real server or parent proxy").Default("2000").Int()
 	httpArgs.HTTPTimeout = http.Flag("http-timeout", "check domain if blocked , http request timeout milliseconds when connect to host").Default("3000").Int()
