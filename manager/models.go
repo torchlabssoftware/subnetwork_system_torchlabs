@@ -12,7 +12,7 @@ type Event struct {
 type EventHandler func(event Event) error
 
 type ErrorPayload struct {
-	Success bool        `json:"success"`
+	Message string      `json:"message"`
 	Payload interface{} `json:"payload"`
 }
 
@@ -45,11 +45,18 @@ type UpstreamConfig struct {
 	Weight           int       `json:"weight"`
 }
 
-type User struct {
+type UserPayload struct {
 	ID          uuid.UUID `json:"id"`
 	Username    string    `json:"username"`
 	Password    string    `json:"password"`
 	Status      string    `json:"status"`
 	IpWhitelist []string  `json:"ip_whitelist"`
 	Pools       []string  `json:"pools"`
+}
+
+type User struct {
+	ID          uuid.UUID
+	Status      string
+	IpWhitelist []string
+	Pools       []string
 }

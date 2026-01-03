@@ -52,7 +52,6 @@ func (w *WebsocketManager) ReadMessage(wg *sync.WaitGroup) {
 
 func (w *WebsocketManager) WriteMessage(wg *sync.WaitGroup) {
 	defer func() {
-		close(w.egress)
 		w.Connection.Close()
 		wg.Done()
 	}()
@@ -61,9 +60,9 @@ func (w *WebsocketManager) WriteMessage(wg *sync.WaitGroup) {
 
 		if message.Type == "close" {
 			if err := w.Connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
-				log.Println("Connetion closed:", err)
+				log.Println("message write error.Connetion closed:", err)
 			}
-			log.Println("message write error.Connetion closed:")
+			log.Println("Connetion closed:")
 			return
 		}
 
@@ -76,7 +75,7 @@ func (w *WebsocketManager) WriteMessage(wg *sync.WaitGroup) {
 		if err := w.Connection.WriteMessage(websocket.TextMessage, data); err != nil {
 			log.Printf("faild to send message: %v", err)
 		}
-		log.Println("Sent message")
+		log.Println("Sent message: ", message.Type)
 
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	util "github.com/snail007/goproxy/utils"
 )
 
 type Worker struct {
@@ -21,7 +22,7 @@ type Worker struct {
 	mu                 sync.Mutex
 	reconnect          bool
 	pendingValidations sync.Map
-	users              map[string]*User
+	users              util.ConcurrentMap
 	pool               *Pool
 }
 
@@ -31,7 +32,7 @@ func NewWorker(baseURL, workerID, apiKey string) *Worker {
 		WorkerID:   workerID,
 		APIKey:     apiKey,
 		reconnect:  true,
-		users:      make(map[string]*User),
+		users:      util.NewConcurrentMap(),
 	}
 }
 
@@ -149,11 +150,6 @@ func (c *Worker) HandleEvent(event Event) {
 }
 
 func (c *Worker) VerifyUser(user, pass string) bool {
-
-	c.mu.Lock()
-	c.users[user] = &User{Username: user, Password: pass}
-	c.mu.Unlock()
-
 	respChan := make(chan bool)
 
 	c.pendingValidations.Store(user, respChan)
@@ -178,8 +174,8 @@ func (c *Worker) VerifyUser(user, pass string) bool {
 func (c *Worker) processVerifyUserResponse(payload interface{}) {
 	data, _ := json.Marshal(payload)
 	var resp struct {
-		Success bool `json:"success"`
-		Payload User `json:"payload"`
+		Success bool        `json:"success"`
+		Payload UserPayload `json:"payload"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		log.Printf("[Captain] Failed to parse verify_user_response: %v", err)
@@ -189,10 +185,15 @@ func (c *Worker) processVerifyUserResponse(payload interface{}) {
 	if ch, ok := c.pendingValidations.Load(resp.Payload.Username); ok {
 		ch.(chan bool) <- resp.Success
 		if resp.Success {
-			c.users[resp.Payload.Username] = &resp.Payload
+			user := &User{
+				ID:          resp.Payload.ID,
+				Status:      resp.Payload.Status,
+				IpWhitelist: resp.Payload.IpWhitelist,
+				Pools:       resp.Payload.Pools,
+			}
+			c.users.Set(resp.Payload.Username, user)
 			return
 		}
-		delete(c.users, resp.Payload.Username)
 	}
 }
 
