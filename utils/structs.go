@@ -420,12 +420,24 @@ func NewOutPool(dur int, isTLS bool, certBytes, keyBytes []byte, address string,
 	}
 	var err error
 	op.Pool, err = NewConnPool(poolConfig{
-		IsActive: func(conn interface{}) bool { return true },
+		IsActive: func(conn interface{}) bool {
+			if conn == nil {
+				return false
+			}
+			c := conn.(net.Conn)
+			c.SetReadDeadline(time.Now().Add(time.Millisecond))
+			one := make([]byte, 1)
+			_, err := c.Read(one)
+			c.SetReadDeadline(time.Time{})
+			if err == io.EOF {
+				return false
+			}
+			return true
+		},
 		Release: func(conn interface{}) {
 			if conn != nil {
 				conn.(net.Conn).SetDeadline(time.Now().Add(time.Millisecond))
 				conn.(net.Conn).Close()
-				// log.Println("conn released")
 			}
 		},
 		InitialCap: InitialCap,

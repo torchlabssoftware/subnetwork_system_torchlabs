@@ -49,7 +49,8 @@ func (s *HTTP) Start(args interface{}, validator func(string, string) bool) (err
 	s.cfg = args.(HTTPArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
-		s.InitOutConnPool()
+		//remove the connection pool for proxy chain
+		//s.InitOutConnPool()
 	}
 
 	s.InitService()
@@ -127,15 +128,14 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		return
 	}
 	var outConn net.Conn
-	//var _outConn interface{}
+	var _outConn interface{}
 	if useProxy {
-		/*_outConn, err = s.outPool.Pool.Get()
+		//for proxy chain it use direct tcp but not connection pool
+		//_outConn, err = s.outPool.Pool.Get()
+		_outConn, err = utils.ConnectHost(*s.cfg.Parent, *s.cfg.Timeout)
 		if err == nil {
 			outConn = _outConn.(net.Conn)
-		}*/
-		// For proxy chain: create fresh connection each time
-		// Pool connections don't work well for CONNECT tunnels since each tunnel consumes the connection
-		outConn, err = utils.ConnectHost(*s.cfg.Parent, *s.cfg.Timeout)
+		}
 	} else {
 		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 	}
@@ -156,24 +156,14 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			utils.CloseConn(&outConn)
 			return err
 		}
-
-		// Remove client auth
 		httpReq.Header.Del("Proxy-Authorization")
-
 		user := "alice"
 		pass := "alicepass"
-
 		token := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
-
-		// Add upstream auth
 		httpReq.Header.Set("Proxy-Authorization", "Basic "+token)
-
 		var buf bytes.Buffer
-		// Use WriteProxy for sending to upstream proxy (preserves CONNECT format correctly)
 		httpReq.WriteProxy(&buf)
-
 		outConn.Write(buf.Bytes())
-
 	}
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
