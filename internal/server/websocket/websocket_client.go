@@ -64,6 +64,7 @@ func (w *Worker) ReadMessage() {
 			break
 		}
 
+		log.Println("Received message", request.Type)
 		if err := w.Manager.RouteEvent(request, w); err != nil {
 			log.Println("Error handleing message: ", err)
 			w.egress <- Event{
@@ -102,7 +103,7 @@ func (w *Worker) WriteMessage() {
 			if err := w.Connection.WriteMessage(websocket.TextMessage, data); err != nil {
 				log.Printf("faild to send message: %v", err)
 			}
-			log.Println("Sent message")
+			log.Println("Sent message", message.Type)
 		case <-ticker.C:
 			log.Println("ping to", w.Name)
 			if err := w.Connection.WriteMessage(websocket.PingMessage, []byte(``)); err != nil {

@@ -17,10 +17,10 @@ func ConnectClickHouse(url string) (driver.Conn, error) {
 			Username: "analytics",
 			Password: "analytics123",
 		},
-		Debug: true,
-		Debugf: func(format string, v ...interface{}) {
-			fmt.Printf(format, v...)
-		},
+		Debug: false,
+		// Debugf: func(format string, v ...interface{}) {
+		// 	fmt.Printf(format, v...)
+		// },
 		Compression: &clickhouse.Compression{
 			Method: clickhouse.CompressionLZ4,
 		},

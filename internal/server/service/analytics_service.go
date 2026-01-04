@@ -43,9 +43,7 @@ type UserDataUsage struct {
 	WorkerRegion    string    `json:"worker_region"`
 	BytesSent       uint64    `json:"bytes_sent"`
 	BytesReceived   uint64    `json:"bytes_received"`
-	SessionID       string    `json:"session_id"`
 	SourceIP        string    `json:"source_ip"`
-	UserAgent       string    `json:"user_agent"`
 	Protocol        string    `json:"protocol"`
 	DestinationHost string    `json:"destination_host"`
 	DestinationPort uint16    `json:"destination_port"`
@@ -145,9 +143,8 @@ type WebsiteAccess struct {
 	RequestMethod string    `json:"request_method"`
 	StatusCode    uint16    `json:"status_code"`
 	ContentType   string    `json:"content_type"`
-	UserAgent     string    `json:"user_agent"`
-	SessionID     string    `json:"session_id"`
-	SourceIP      string    `json:"source_ip"`
+
+	SourceIP string `json:"source_ip"`
 }
 
 func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data WebsiteAccess) error {
@@ -222,7 +219,7 @@ func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID stri
 		SELECT
 			user_id, username, domain, subdomain, full_url,
 			bytes_sent, bytes_received, request_method, status_code,
-			content_type, user_agent, session_id, source_ip
+			content_type, source_ip
 		FROM analytics.website_access
 		WHERE user_id = ? AND timestamp >= ? AND timestamp <= ?
 		ORDER BY timestamp
@@ -273,10 +270,10 @@ func (s *analyticsService) flushUserData(items []UserDataUsage) {
 	ctx := context.Background()
 	query := `INSERT INTO analytics.user_data_usage (
 			user_id, username, pool_id, pool_name, worker_id, worker_region,
-			bytes_sent, bytes_received, session_id, source_ip, user_agent,
+			bytes_sent, bytes_received, source_ip,
 			protocol, destination_host, destination_port, status_code
 		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)`
 
 	batch, err := s.conn.PrepareBatch(ctx, query)
@@ -288,7 +285,7 @@ func (s *analyticsService) flushUserData(items []UserDataUsage) {
 	for _, data := range items {
 		err := batch.Append(
 			data.UserID, data.Username, data.PoolID, data.PoolName, data.WorkerID, data.WorkerRegion,
-			data.BytesSent, data.BytesReceived, data.SessionID, data.SourceIP, data.UserAgent,
+			data.BytesSent, data.BytesReceived, data.SourceIP,
 			data.Protocol, data.DestinationHost, data.DestinationPort, data.StatusCode,
 		)
 		if err != nil {
@@ -336,9 +333,9 @@ func (s *analyticsService) flushWebsiteAccess(items []WebsiteAccess) {
 	query := `INSERT INTO analytics.website_access (
 			user_id, username, domain, subdomain, full_url,
 			bytes_sent, bytes_received, request_method, status_code,
-			content_type, user_agent, session_id, source_ip
+			content_type, source_ip
 		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)`
 
 	batch, err := s.conn.PrepareBatch(ctx, query)
@@ -351,7 +348,7 @@ func (s *analyticsService) flushWebsiteAccess(items []WebsiteAccess) {
 		err := batch.Append(
 			data.UserID, data.Username, data.Domain, data.Subdomain, data.FullURL,
 			data.BytesSent, data.BytesReceived, data.RequestMethod, data.StatusCode,
-			data.ContentType, data.UserAgent, data.SessionID, data.SourceIP,
+			data.ContentType, data.SourceIP,
 		)
 		if err != nil {
 			log.Printf("Failed to append website access to batch: %v", err)

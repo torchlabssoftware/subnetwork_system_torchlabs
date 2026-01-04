@@ -13,9 +13,7 @@ CREATE TABLE IF NOT EXISTS analytics.user_data_usage (
     worker_region String,
     bytes_sent UInt64,
     bytes_received UInt64,
-    session_id String,
-    source_ip IPv4,
-    user_agent String,
+    source_ip String,
     protocol String,
     destination_host String,
     destination_port UInt16,
@@ -89,9 +87,9 @@ CREATE TABLE IF NOT EXISTS analytics.website_access (
     request_method String,
     status_code UInt16,
     content_type String,
-    user_agent String,
-    session_id String,
-    source_ip IPv4
+   
+  
+    source_ip String
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(date)
 ORDER BY (domain, date, timestamp)
@@ -139,7 +137,7 @@ CREATE TABLE IF NOT EXISTS analytics.user_behavior (
     date Date DEFAULT toDate(timestamp),
     user_id UUID,
     username String,
-    session_id String,
+  
     session_start DateTime,
     session_end DateTime,
     total_requests UInt32,
@@ -168,7 +166,7 @@ SELECT
     sumState(bytes_sent) AS bytes_sent,
     sumState(bytes_received) AS bytes_received,
     countState() AS request_count,
-    uniqState(session_id) AS unique_sessions,
+  
     uniqState(destination_host) AS unique_destinations
 FROM analytics.user_data_usage
 GROUP BY date, hour, user_id, username;
@@ -184,7 +182,7 @@ SELECT
     sum(bytes_sent) AS bytes_sent,
     sum(bytes_received) AS bytes_received,
     count() AS request_count,
-    uniq(session_id) AS unique_sessions,
+  
     uniq(destination_host) AS unique_destinations
 FROM analytics.user_data_usage
 GROUP BY date, user_id, username;
