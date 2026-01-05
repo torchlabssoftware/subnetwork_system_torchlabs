@@ -1,0 +1,5 @@
+.env.dev
+.env.prod
+dump_data.txt
+.air.toml
+tmp/
