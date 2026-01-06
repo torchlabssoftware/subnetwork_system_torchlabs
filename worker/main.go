@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/snail007/goproxy/services"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/snail007/goproxy/services"
 )
 
 const APP_VERSION = "3.0"
@@ -18,6 +19,8 @@ func main() {
 	}
 	Clean(&service.S)
 }
+
+// gracefull shut down. cleanupdone change wait for os interrupt and shutdown the server
 func Clean(s *services.Service) {
 	signalChan := make(chan os.Signal, 1)
 	cleanupDone := make(chan bool)
@@ -28,7 +31,7 @@ func Clean(s *services.Service) {
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 	go func() {
-		for _ = range signalChan {
+		for range signalChan {
 			fmt.Println("\nReceived an interrupt, stopping services...")
 			(*s).Clean()
 			cleanupDone <- true

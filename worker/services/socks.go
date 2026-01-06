@@ -49,6 +49,7 @@ type SOCKS struct {
 	cfg       SOCKSArgs
 	checker   utils.Checker
 	basicAuth utils.BasicAuth
+	worker    *manager.Worker
 }
 
 func (s *SOCKS) SetValidator(validator func(string, string) bool) {
@@ -66,8 +67,10 @@ func NewSOCKS() Service {
 
 func (s *SOCKS) InitService() {
 	s.InitBasicAuth()
-	if *s.cfg.Parent != "" {
-		s.checker = utils.NewChecker(*s.cfg.Timeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
+	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+
+		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
+
 	}
 }
 
@@ -77,15 +80,17 @@ func (s *SOCKS) StopService() {
 	}
 }
 
-func (s *SOCKS) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *SOCKS) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(SOCKSArgs)
-	if *s.cfg.Parent != "" {
+	s.worker = worker
+
+	/*if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
 		s.InitOutConnPool()
-	}
+	}*/
 
 	s.InitService()
-	s.SetValidator(validator)
+	s.SetValidator(worker.VerifyUser)
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -130,7 +135,7 @@ func (s *SOCKS) callback(inConn net.Conn) {
 	}
 
 	useProxy := true
-	if *s.cfg.Parent == "" {
+	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
 		useProxy = false
 	} else if *s.cfg.Always {
 		useProxy = true
@@ -142,10 +147,10 @@ func (s *SOCKS) callback(inConn net.Conn) {
 
 	err = s.OutToTCP(useProxy, address, &inConn)
 	if err != nil {
-		if *s.cfg.Parent == "" {
+		if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
 			log.Printf("connect to %s fail, ERR:%s", address, err)
 		} else {
-			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, *s.cfg.Parent)
+			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
 		}
 		utils.CloseConn(&inConn)
 	}
@@ -341,11 +346,33 @@ func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn) (err e
 	outAddr := outConn.RemoteAddr().String()
 	outLocalAddr := outConn.LocalAddr().String()
 
+	// Track connection in HealthCollector
+	if s.worker != nil && s.worker.HealthCollector != nil {
+		s.worker.HealthCollector.IncrementConnection()
+	}
+
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, address)
+
+		// Decrement connection count
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.DecrementConnection()
+			// Record success/error
+			if err != nil {
+				s.worker.HealthCollector.RecordError()
+			} else {
+				s.worker.HealthCollector.RecordSuccess()
+			}
+		}
+
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
-	}, func(n int, d bool) {}, 0)
+	}, func(n int, d bool) {
+		// Track throughput in HealthCollector
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.AddThroughput(uint64(n))
+		}
+	}, 0)
 	log.Printf("conn %s - %s - %s - %s connected [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, address)
 	return
 }
@@ -356,7 +383,7 @@ func (s *SOCKS) InitOutConnPool() {
 			*s.cfg.CheckParentInterval,
 			*s.cfg.ParentType == TYPE_TLS,
 			s.cfg.CertBytes, s.cfg.KeyBytes,
-			*s.cfg.Parent,
+			"",
 			*s.cfg.Timeout,
 			*s.cfg.PoolSize,
 			*s.cfg.PoolSize*2,

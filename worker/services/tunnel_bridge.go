@@ -1,5 +1,6 @@
 package services
 
+/*
 import (
 	"bufio"
 	"encoding/binary"
@@ -45,7 +46,7 @@ func (s *TunnelBridge) Check() {
 func (s *TunnelBridge) StopService() {
 
 }
-func (s *TunnelBridge) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *TunnelBridge) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(TunnelBridgeArgs)
 	s.Check()
 	s.InitService()
@@ -183,3 +184,4 @@ func (s *TunnelBridge) ChnDeamon(item *BridgeItem) {
 		}
 	}()
 }
+*/

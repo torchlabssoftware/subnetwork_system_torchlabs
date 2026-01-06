@@ -1,6 +1,6 @@
 package services
 
-import (
+/*import (
 	"fmt"
 	"io"
 	"log"
@@ -34,7 +34,7 @@ func (s *TCP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *TCP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *TCP) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(TCPArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
@@ -171,3 +171,4 @@ func (s *TCP) InitOutConnPool() {
 		)
 	}
 }
+*/

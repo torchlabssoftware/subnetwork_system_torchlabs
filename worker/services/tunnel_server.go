@@ -1,5 +1,6 @@
 package services
 
+/*
 import (
 	"bufio"
 	"bytes"
@@ -51,7 +52,7 @@ func (s *TunnelServer) Check() {
 }
 func (s *TunnelServer) StopService() {
 }
-func (s *TunnelServer) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *TunnelServer) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(TunnelServerArgs)
 	s.Check()
 	s.InitService()
@@ -209,3 +210,4 @@ func (s *TunnelServer) UDPConnDeamon() {
 		}
 	}()
 }
+*/
