@@ -77,3 +77,27 @@ type UserDataUsage struct {
 	DestinationPort uint16    `json:"destination_port"`
 	StatusCode      uint16    `json:"status_code"`
 }
+
+// WorkerHealth represents the health status of a worker for telemetry
+type WorkerHealth struct {
+	WorkerID              uuid.UUID        `json:"worker_id"`
+	WorkerName            string           `json:"worker_name"`
+	Region                string           `json:"region"`
+	Status                string           `json:"status"`
+	CpuUsage              float32          `json:"cpu_usage"`
+	MemoryUsage           float32          `json:"memory_usage"`
+	ActiveConnections     uint32           `json:"active_connections"`
+	TotalConnections      uint64           `json:"total_connections"`
+	BytesThroughputPerSec uint64           `json:"bytes_throughput_per_sec"`
+	ErrorRate             float32          `json:"error_rate"`
+	Upstreams             []UpstreamHealth `json:"upstreams"`
+}
+
+// UpstreamHealth represents the health status of an upstream proxy
+type UpstreamHealth struct {
+	UpstreamID  uuid.UUID `json:"upstream_id"`
+	UpstreamTag string    `json:"upstream_tag"`
+	Status      string    `json:"status"`
+	Latency     int64     `json:"latency"`
+	ErrorRate   float32   `json:"error_rate"`
+}

@@ -6,10 +6,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -21,6 +21,7 @@ type Checker struct {
 	interval   int64
 	timeout    int
 }
+
 type CheckerItem struct {
 	IsHTTPS      bool
 	Method       string
@@ -56,7 +57,7 @@ func NewChecker(timeout int, interval int64, blockedFile, directFile string) Che
 func (c *Checker) loadMap(f string) (dataMap ConcurrentMap) {
 	dataMap = NewConcurrentMap()
 	if PathExists(f) {
-		_contents, err := ioutil.ReadFile(f)
+		_contents, err := os.ReadFile(f)
 		if err != nil {
 			log.Printf("load file err:%s", err)
 			return
@@ -184,7 +185,7 @@ func NewBasicAuth() BasicAuth {
 	}
 }
 func (ba *BasicAuth) AddFromFile(file string) (n int, err error) {
-	_content, err := ioutil.ReadFile(file)
+	_content, err := os.ReadFile(file)
 	if err != nil {
 		return
 	}
@@ -213,6 +214,7 @@ func (ba *BasicAuth) Add(userpassArr []string) (n int) {
 	return
 }
 
+// check in basic auth and if not check in the captain
 func (ba *BasicAuth) Check(userpass string) (ok bool) {
 	u := strings.Split(strings.Trim(userpass, " "), ":")
 	if len(u) == 2 {
@@ -220,7 +222,6 @@ func (ba *BasicAuth) Check(userpass string) (ok bool) {
 			log.Printf("basic auth check , user:%s pass:%s", u[0], u[1])
 			return p.(string) == u[1]
 		}
-
 		if ba.Validator != nil {
 			isValid := ba.Validator(u[0], u[1])
 			if isValid {
@@ -231,6 +232,7 @@ func (ba *BasicAuth) Check(userpass string) (ok bool) {
 	}
 	return
 }
+
 func (ba *BasicAuth) Total() (n int) {
 	n = ba.data.Count()
 	return
@@ -351,6 +353,7 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 	}
 
 	authOk := (*req.basicAuth).Check(string(user))
+
 	//log.Printf("auth %s,%v", string(user), authOk)
 	if !authOk {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")

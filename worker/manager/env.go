@@ -13,7 +13,7 @@ type EnvConfig struct {
 	APIKey     string
 }
 
-func Load() EnvConfig {
+func EnvLoad() EnvConfig {
 	appEnv := os.Getenv("APP_ENV")
 	log.Println("APP_ENV:", appEnv)
 
@@ -48,9 +48,17 @@ func (c *EnvConfig) validate() {
 		"API_KEY":     c.APIKey,
 	}
 
+	var message strings.Builder
+	isValid := true
+
 	for key, val := range required {
 		if strings.TrimSpace(val) == "" {
-			log.Fatalf("Not provide %v in env", key)
+			message.WriteString("Not provide " + key + " in env.")
+			isValid = false
 		}
+	}
+
+	if !isValid {
+		log.Fatalf("%s", message.String())
 	}
 }

@@ -1,5 +1,6 @@
 package services
 
+/*
 import (
 	"bytes"
 	"crypto/tls"
@@ -38,7 +39,7 @@ func (s *TunnelClient) Check() {
 }
 func (s *TunnelClient) StopService() {
 }
-func (s *TunnelClient) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *TunnelClient) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(TunnelClientArgs)
 	s.Check()
 	s.InitService()
@@ -215,3 +216,4 @@ func (s *TunnelClient) ServeConn() {
 	}, func(i int, b bool) {}, 0)
 	log.Printf("%s conn %s - %s - %s - %s created", *s.cfg.Key, inConn.RemoteAddr(), inConn.LocalAddr(), outConn.LocalAddr(), outConn.RemoteAddr())
 }
+*/

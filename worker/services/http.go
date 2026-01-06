@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/snail007/goproxy/manager"
@@ -20,16 +21,11 @@ import (
 )
 
 type HTTP struct {
-	outPool     utils.OutPool
-	cfg         HTTPArgs
-	checker     utils.Checker
-	basicAuth   utils.BasicAuth
-	upstreamMgr *manager.UpstreamManager
-	worker      *manager.Worker
-}
-
-func (s *HTTP) SetValidator(validator func(string, string) bool) {
-	s.basicAuth.Validator = validator
+	outPool   utils.OutPool
+	cfg       HTTPArgs
+	checker   utils.Checker
+	basicAuth utils.BasicAuth
+	worker    *manager.Worker
 }
 
 func NewHTTP() Service {
@@ -42,11 +38,8 @@ func NewHTTP() Service {
 }
 func (s *HTTP) InitService() {
 	s.InitBasicAuth()
-	// Only use checker if no upstream manager (fallback to -P flag)
-	if *s.cfg.Parent != "" || s.upstreamMgr == nil || !s.upstreamMgr.HasUpstreams() {
-		if *s.cfg.Parent != "" {
-			s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
-		}
+	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
 func (s *HTTP) StopService() {
@@ -54,18 +47,18 @@ func (s *HTTP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *HTTP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *HTTP) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(HTTPArgs)
-	s.upstreamMgr = upstreamMgr
 	s.worker = worker
 
-	if *s.cfg.Parent != "" {
+	//add connection pool for upstream connections later
+	/*if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
-	}
+		s.InitOutConnPool()
+	}*/
 
 	s.InitService()
-
-	s.SetValidator(validator)
+	s.basicAuth.Validator = worker.VerifyUser
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -103,7 +96,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 
 	// Determine if we should use upstream proxy
 	useProxy := false
-	if s.upstreamMgr != nil && s.upstreamMgr.HasUpstreams() || *s.cfg.Parent != "" {
+	if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
 		useProxy = true
 	} else if *s.cfg.Always {
 		useProxy = true
@@ -119,10 +112,10 @@ func (s *HTTP) callback(inConn net.Conn) {
 	log.Printf("use proxy : %v, %s", useProxy, address)
 	err = s.OutToTCP(useProxy, address, &inConn, &req)
 	if err != nil {
-		if *s.cfg.Parent == "" {
-			log.Printf("connect to %s fail, ERR:%s", address, err)
+		if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
+			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
 		} else {
-			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, *s.cfg.Parent)
+			log.Printf("connect to %s fail, ERR:%s", address, err)
 		}
 		utils.CloseConn(&inConn)
 	}
@@ -139,23 +132,36 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 
 	var outConn net.Conn
 	var upstreamUser, upstreamPass string
+	var currentUpstream *manager.Upstream
 
 	if useProxy {
 		// Try to get upstream from manager (round-robin)
-		if s.upstreamMgr != nil && s.upstreamMgr.HasUpstreams() {
-			upstream := s.upstreamMgr.Next()
+		if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
+			upstream := s.worker.UpstreamManager.Next()
 			if upstream != nil {
+				currentUpstream = upstream
 				upstreamAddr := upstream.GetAddress()
 				upstreamUser = upstream.UpstreamUsername
 				upstreamPass = upstream.UpstreamPassword
 				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstreamAddr, upstream.UpstreamTag)
+
+				// Measure connection latency for upstream health tracking
+				connectStart := time.Now()
 				outConn, err = utils.ConnectHost(upstreamAddr, *s.cfg.Timeout)
+				connectLatency := time.Since(connectStart)
+
+				// Record upstream latency in health collector
+				if s.worker != nil && s.worker.HealthCollector != nil {
+					s.worker.HealthCollector.RecordUpstreamLatency(
+						upstream.UpstreamID,
+						upstream.UpstreamTag,
+						connectLatency,
+						err != nil,
+					)
+				}
 			} else {
 				err = fmt.Errorf("no upstream available")
 			}
-		} else if *s.cfg.Parent != "" {
-			// Fallback to -P flag if no upstreams from Captain
-			outConn, err = utils.ConnectHost(*s.cfg.Parent, *s.cfg.Timeout)
 		} else {
 			err = fmt.Errorf("no upstream configured")
 		}
@@ -163,8 +169,11 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 	}
 
+	// Store current upstream for error tracking on connection close
+	_ = currentUpstream // Will be used for per-request upstream error tracking if needed
+
 	if err != nil {
-		log.Printf("connect to %s , err:%s", *s.cfg.Parent, err)
+		log.Printf("connect to %s , err:%s", "", err)
 		utils.CloseConn(inConn)
 		return
 	}
@@ -213,8 +222,24 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		destPort = uint16(p)
 	}
 
+	// Track connection in HealthCollector
+	if s.worker != nil && s.worker.HealthCollector != nil {
+		s.worker.HealthCollector.IncrementConnection()
+	}
+
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
+
+		// Decrement connection count
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.DecrementConnection()
+			// Record success/error
+			if err != nil {
+				s.worker.HealthCollector.RecordError()
+			} else {
+				s.worker.HealthCollector.RecordSuccess()
+			}
+		}
 
 		// Send data usage to Captain when connection closes
 		if s.worker != nil && (bytesSent > 0 || bytesReceived > 0) {
@@ -253,9 +278,14 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		} else {
 			atomic.AddUint64(&bytesSent, uint64(n))
 		}
+		// Track throughput in HealthCollector
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.AddThroughput(uint64(n))
+		}
 	}, 0)
 	log.Printf("conn %s - %s - %s - %s connected [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 	return
+
 }
 func (s *HTTP) OutToUDP(inConn *net.Conn) (err error) {
 	return
@@ -268,7 +298,8 @@ func (s *HTTP) InitOutConnPool() {
 			*s.cfg.CheckParentInterval,
 			*s.cfg.ParentType == TYPE_TLS,
 			s.cfg.CertBytes, s.cfg.KeyBytes,
-			*s.cfg.Parent,
+			//address for the connection pool
+			"",
 			*s.cfg.Timeout,
 			*s.cfg.PoolSize,
 			*s.cfg.PoolSize*2,

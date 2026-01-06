@@ -10,12 +10,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	util "github.com/snail007/goproxy/utils"
 )
 
 type Worker struct {
 	WorkerID           string
+	WorkerName         string
+	Region             string
 	CaptainURL         string
 	APIKey             string
 	WebsocketManager   *WebsocketManager
@@ -25,20 +28,36 @@ type Worker struct {
 	Users              util.ConcurrentMap
 	Pool               *Pool
 	UpstreamManager    *UpstreamManager
+	HealthCollector    *HealthCollector
 }
 
 func NewWorker(baseURL, workerID, apiKey string) *Worker {
+	workerUUID, _ := uuid.Parse(workerID)
+	upstreamMgr := NewUpstreamManager()
 	return &Worker{
 		CaptainURL:      baseURL,
 		WorkerID:        workerID,
 		APIKey:          apiKey,
 		reconnect:       true,
 		Users:           util.NewConcurrentMap(),
-		UpstreamManager: NewUpstreamManager(),
+		UpstreamManager: upstreamMgr,
+		HealthCollector: NewHealthCollector(workerUUID, "", "", upstreamMgr),
 	}
 }
 
 func (c *Worker) Start() {
+	// Start the health collector for periodic sampling
+	c.HealthCollector.Start()
+
+	// Start hourly health telemetry reporting
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			c.SendHealthTelemetry()
+		}
+	}()
+
 	go func() {
 		for c.reconnect {
 			if err := c.Connect(); err != nil {
@@ -225,6 +244,11 @@ func (c *Worker) processConfig(payload interface{}) {
 	// Update the UpstreamManager with the new upstreams for round-robin load balancing
 	c.UpstreamManager.SetUpstreams(upstreams)
 
+	// Update worker name and region in health collector
+	c.WorkerName = config.WorkerName
+	c.Pool.Region = "" // Region will be set when Captain provides it
+	c.HealthCollector.UpdateWorkerInfo(config.WorkerName, c.Pool.Region)
+
 	log.Printf("[Captain] Configuration received for Pool: %s (Port: %d)", config.PoolTag, config.PoolPort)
 	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
 }
@@ -252,4 +276,22 @@ func (c *Worker) SendDataUsage(usage UserDataUsage) {
 	c.WebsocketManager.egress <- event
 	log.Printf("[DataUsage] Sent usage: user=%s, bytes_sent=%d, bytes_received=%d, dest=%s:%d",
 		usage.Username, usage.BytesSent, usage.BytesReceived, usage.DestinationHost, usage.DestinationPort)
+}
+
+// SendHealthTelemetry sends worker health telemetry to Captain via WebSocket
+func (c *Worker) SendHealthTelemetry() {
+	if c.WebsocketManager == nil {
+		log.Printf("[HealthTelemetry] WebSocket not connected, cannot send health telemetry")
+		return
+	}
+
+	health := c.HealthCollector.BuildWorkerHealth()
+	event := Event{
+		Type:    "telemetry_health",
+		Payload: health,
+	}
+
+	c.WebsocketManager.egress <- event
+	log.Printf("[HealthTelemetry] Sent health: status=%s, cpu=%.2f%%, mem=%.2f%%, active_conns=%d, throughput=%d bytes/sec",
+		health.Status, health.CpuUsage, health.MemoryUsage, health.ActiveConnections, health.BytesThroughputPerSec)
 }

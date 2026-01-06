@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -20,7 +19,8 @@ var (
 )
 
 func initConfig() (err error) {
-	envConfig = manager.Load()
+	//load env
+	envConfig = manager.EnvLoad()
 
 	//keygen
 	if len(os.Args) > 1 {
@@ -29,8 +29,9 @@ func initConfig() (err error) {
 			os.Exit(0)
 		}
 	}
-	args := services.Args{}
+
 	//define  args
+	args := services.Args{}
 	tcpArgs := services.TCPArgs{}
 	httpArgs := services.HTTPArgs{}
 	socksArgs := services.SOCKSArgs{}
@@ -39,16 +40,17 @@ func initConfig() (err error) {
 	tunnelBridgeArgs := services.TunnelBridgeArgs{}
 	udpArgs := services.UDPArgs{}
 
-	//build srvice args
 	app = kingpin.New("proxy", "happy with proxy")
 	app.Author("snail").Version(APP_VERSION)
-	args.Parent = app.Flag("parent", "parent address, such as: \"23.32.32.19:28008\"").Default("").Short('P').String()
+
+	//build srvice args
 	args.Local = app.Flag("local", "local ip:port to listen").Short('p').Default(":33080").String()
 	certTLS := app.Flag("cert", "cert file for tls").Short('C').Default("proxy.crt").String()
 	keyTLS := app.Flag("key", "key file for tls").Short('K').Default("proxy.key").String()
 
 	// Captain Server Configuration
 	captainURL := envConfig.CaptainURL
+	apiKey := envConfig.APIKey
 	workerID := app.Flag("worker-id", "Worker ID UUID").String()
 
 	//########http#########
@@ -69,7 +71,7 @@ func initConfig() (err error) {
 	//########socks#########
 	socks := app.Command("socks", "proxy on socks5 mode")
 	socksArgs.LocalType = socks.Flag("local-type", "local protocol type <tls|tcp>").Default("tcp").Short('t').Enum("tls", "tcp")
-	socksArgs.ParentType = socks.Flag("parent-type", "parent protocol type <tls|tcp>").Short('T').Enum("tls", "tcp")
+	socksArgs.ParentType = socks.Flag("parent-type", "parent protocol type <tls|tcp>").Default("tcp").Short('T').Enum("tls", "tcp")
 	socksArgs.Always = socks.Flag("always", "always use parent proxy").Default("false").Bool()
 	socksArgs.Timeout = socks.Flag("timeout", "tcp timeout milliseconds when connect to real server or parent proxy").Default("2000").Int()
 	socksArgs.Interval = socks.Flag("interval", "check domain if blocked every interval seconds").Default("10").Int()
@@ -121,7 +123,7 @@ func initConfig() (err error) {
 	var worker *manager.Worker
 	if captainURL != "" && *workerID != "" {
 		log.Printf("Starting Captain Client (URL: %s, WorkerID: %s)", captainURL, *workerID)
-		worker = manager.NewWorker(captainURL, *workerID, envConfig.APIKey)
+		worker = manager.NewWorker(captainURL, *workerID, apiKey)
 		worker.Start()
 	} else {
 		log.Println("Captain Client not configured (missing captain-url or worker-id)")
@@ -141,12 +143,12 @@ func initConfig() (err error) {
 	serviceName := kingpin.MustParse(app.Parse(os.Args[1:]))
 	services.Regist("http", services.NewHTTP(), httpArgs)
 	services.Regist("socks", services.NewSOCKS(), socksArgs)
-	services.Regist("tcp", services.NewTCP(), tcpArgs)
-	services.Regist("udp", services.NewUDP(), udpArgs)
-	services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)
-	services.Regist("tclient", services.NewTunnelClient(), tunnelClientArgs)
-	services.Regist("tbridge", services.NewTunnelBridge(), tunnelBridgeArgs)
-	service, err = services.Run(serviceName, worker.VerifyUser, worker.UpstreamManager, worker)
+	//services.Regist("tcp", services.NewTCP(), tcpArgs)
+	//services.Regist("udp", services.NewUDP(), udpArgs)
+	//services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)
+	//services.Regist("tclient", services.NewTunnelClient(), tunnelClientArgs)
+	//services.Regist("tbridge", services.NewTunnelBridge(), tunnelBridgeArgs)
+	service, err = services.Run(serviceName, worker)
 	if err != nil {
 		log.Fatalf("run service [%s] fail, ERR:%s", service, err)
 	}
@@ -165,13 +167,14 @@ func poster() {
 		
 		v%s`+" by snail , blog : http://www.host900.com/\n\n", APP_VERSION)
 }
+
 func tlsBytes(cert, key string) (certBytes, keyBytes []byte) {
-	certBytes, err := ioutil.ReadFile(cert)
+	certBytes, err := os.ReadFile(cert)
 	if err != nil {
 		log.Fatalf("err : %s", err)
 		return
 	}
-	keyBytes, err = ioutil.ReadFile(key)
+	keyBytes, err = os.ReadFile(key)
 	if err != nil {
 		log.Fatalf("err : %s", err)
 		return
