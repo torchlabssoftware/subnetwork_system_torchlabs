@@ -84,7 +84,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 			log.Printf("http(s) conn handler crashed with err : %s \nstack: %s", err, string(debug.Stack()))
 		}
 	}()
-	req, err := utils.NewHTTPRequest(&inConn, 4096, s.IsBasicAuth(), &s.basicAuth)
+	req, err := utils.NewHTTPRequest(&inConn, 4096, &s.basicAuth)
 	if err != nil {
 		if err != io.EOF {
 			log.Printf("decoder error , form %s, ERR:%s", inConn.RemoteAddr(), err)
@@ -120,6 +120,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 		utils.CloseConn(&inConn)
 	}
 }
+
 func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *utils.HTTPRequest) (err error) {
 	inAddr := (*inConn).RemoteAddr().String()
 	inLocalAddr := (*inConn).LocalAddr().String()

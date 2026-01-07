@@ -239,17 +239,16 @@ func (ba *BasicAuth) Total() (n int) {
 }
 
 type HTTPRequest struct {
-	HeadBuf     []byte
-	conn        *net.Conn
-	Host        string
-	Method      string
-	URL         string
-	hostOrURL   string
-	isBasicAuth bool
-	basicAuth   *BasicAuth
+	HeadBuf   []byte
+	conn      *net.Conn
+	Host      string
+	Method    string
+	URL       string
+	hostOrURL string
+	basicAuth *BasicAuth
 }
 
-func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *BasicAuth) (req HTTPRequest, err error) {
+func NewHTTPRequest(inConn *net.Conn, bufSize int, basicAuth *BasicAuth) (req HTTPRequest, err error) {
 	buf := make([]byte, bufSize)
 	len := 0
 	req = HTTPRequest{
@@ -277,7 +276,6 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *
 		return
 	}
 	req.Method = strings.ToUpper(req.Method)
-	req.isBasicAuth = isBasicAuth
 	req.basicAuth = basicAuth
 	log.Printf("%s:%s", req.Method, req.hostOrURL)
 
@@ -289,14 +287,10 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *
 	return
 }
 func (req *HTTPRequest) HTTP() (err error) {
-
-	//	if req.isBasicAuth {
-
 	err = req.BasicAuth()
 	if err != nil {
 		return
 	}
-	//	}
 	req.URL, err = req.getHTTPURL()
 	if err == nil {
 		u, _ := url.Parse(req.URL)
@@ -305,29 +299,28 @@ func (req *HTTPRequest) HTTP() (err error) {
 	}
 	return
 }
-func (req *HTTPRequest) HTTPS() (err error) {
 
+func (req *HTTPRequest) HTTPS() (err error) {
 	err = req.BasicAuth()
 	if err != nil {
 		return
 	}
-
 	req.Host = req.hostOrURL
 	req.addPortIfNot()
-	//_, err = fmt.Fprint(*req.conn, "HTTP/1.1 200 Connection established\r\n\r\n")
 	return
 }
+
 func (req *HTTPRequest) HTTPSReply() (err error) {
 	_, err = fmt.Fprint(*req.conn, "HTTP/1.1 200 Connection established\r\n\r\n")
 	return
 }
+
 func (req *HTTPRequest) IsHTTPS() bool {
 	return req.Method == "CONNECT"
 }
 
 func (req *HTTPRequest) BasicAuth() (err error) {
 
-	//log.Printf("request :%s", string(b[:n]))
 	authorization, err := req.getHeader("Proxy-Authorization")
 	if err != nil {
 		fmt.Fprint((*req.conn),
@@ -338,7 +331,7 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 		CloseConn(req.conn)
 		return
 	}
-	//log.Printf("Authorization:%s", authorization)
+
 	basic := strings.Fields(authorization)
 	if len(basic) != 2 {
 		err = fmt.Errorf("authorization data error,ERR:%s", authorization)
@@ -354,7 +347,6 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 
 	authOk := (*req.basicAuth).Check(string(user))
 
-	//log.Printf("auth %s,%v", string(user), authOk)
 	if !authOk {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")
 		CloseConn(req.conn)
@@ -363,6 +355,7 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 	}
 	return
 }
+
 func (req *HTTPRequest) getHTTPURL() (URL string, err error) {
 	if !strings.HasPrefix(req.hostOrURL, "/") {
 		return req.hostOrURL, nil
@@ -374,6 +367,7 @@ func (req *HTTPRequest) getHTTPURL() (URL string, err error) {
 	URL = fmt.Sprintf("http://%s%s", _host, req.hostOrURL)
 	return
 }
+
 func (req *HTTPRequest) getHeader(key string) (val string, err error) {
 	key = strings.ToUpper(key)
 	lines := strings.Split(string(req.HeadBuf), "\r\n")
@@ -393,14 +387,11 @@ func (req *HTTPRequest) getHeader(key string) (val string, err error) {
 }
 
 func (req *HTTPRequest) addPortIfNot() (newHost string) {
-	//newHost = req.Host
 	port := "80"
 	if req.IsHTTPS() {
 		port = "443"
 	}
 	if (!strings.HasPrefix(req.Host, "[") && strings.Index(req.Host, ":") == -1) || (strings.HasPrefix(req.Host, "[") && strings.HasSuffix(req.Host, "]")) {
-		//newHost = req.Host + ":" + port
-		//req.headBuf = []byte(strings.Replace(string(req.headBuf), req.Host, newHost, 1))
 		req.Host = req.Host + ":" + port
 	}
 	return
