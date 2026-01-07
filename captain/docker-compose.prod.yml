@@ -1,28 +1,38 @@
 services:
   app:
-    build: .
-    container_name: subnetwork_system_prod
-    depends_on:
-      - postgres
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env.prod
-    environment:
-      - APP_ENV=prod
-    restart: unless-stopped
-  postgres:
+   build: .
+   container_name: subnetwork_system_dev
+   depends_on:
+    - postgres_dev
+   ports:
+    - "8080:8080"
+   env_file:
+    - .env.prod
+   environment:
+    - APP_ENV=prod
+   restart: unless-stopped
+  postgres_dev:
     image: postgres:15
-    container_name: subnetwork_system_database_prod
+    container_name: subnetwork_system_database_dev
     restart: always
     environment:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydatabase
+      POSTGRES_DB: subnetwork_system_database
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  clickhouse_dev:
+    image: clickhouse/clickhouse-server:latest
+    container_name: subnetwork_system_clickhouse_dev
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./sql/clickhouse:/docker-entrypoint-initdb.d
 
 volumes:
   postgres_data:
+  clickhouse_data:

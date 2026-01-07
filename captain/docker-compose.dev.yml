@@ -1,24 +1,24 @@
 services:
-  #app:
-  #build: .
-  #container_name: subnetwork_system_dev
-  #depends_on:
-  #  - postgres_dev
-  #ports:
-  #  - "8080:8080"
-  #env_file:
-  #  - .env.dev
-  #environment:
-  #  - APP_ENV=dev
-  #restart: unless-stopped
+  app:
+   build: .
+   container_name: subnetwork_system_dev
+   depends_on:
+    - postgres_dev
+   ports:
+    - "8080:8080"
+   env_file:
+    - .env.dev
+   environment:
+    - APP_ENV=dev
+   restart: unless-stopped
   postgres_dev:
     image: postgres:15
-    container_name: subnetwork_system_database_dev
+    container_name: subnetwork_system_postgres_dev
     restart: always
     environment:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: subnetwork_system_database
+      POSTGRES_DB: subnetwork_system_database_dev
     ports:
       - "5432:5432"
     volumes:
@@ -32,19 +32,6 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./sql/clickhouse:/docker-entrypoint-initdb.d
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 26214
-    ch-ui:
-      image: ghcr.io/caioricciuti/ch-ui:latest
-      environment:
-        VITE_CLICKHOUSE_URL: http://172.18.1.82:8123
-        VITE_CLICKHOUSE_USER: analytics
-        VITE_CLICKHOUSE_PASS: analytics123
-        VITE_CLICKHOUSE_REQUEST_TIMEOUT: "60000"
-      ports:
-      - "5521:5521" 
 
 volumes:
   postgres_data:

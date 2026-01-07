@@ -11,7 +11,7 @@ import (
 
 func ConnectClickHouse(url string) (driver.Conn, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
-		Addr: []string{"localhost:9000"},
+		Addr: []string{url},
 		Auth: clickhouse.Auth{
 			Database: "analytics",
 			Username: "analytics",
