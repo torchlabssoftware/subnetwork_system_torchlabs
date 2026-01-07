@@ -53,7 +53,7 @@ func (c *EnvConfig) validate() {
 
 	for key, val := range required {
 		if strings.TrimSpace(val) == "" {
-			message.WriteString("Not provide " + key + " in env.")
+			message.WriteString("Not provide " + key + " in .env.")
 			isValid = false
 		}
 	}
