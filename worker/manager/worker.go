@@ -16,40 +16,39 @@ import (
 )
 
 type Worker struct {
-	WorkerID           string
-	WorkerName         string
+	ID                 uuid.UUID
+	Name               string
 	Region             string
+	Pool               *Pool
 	CaptainURL         string
 	APIKey             string
 	WebsocketManager   *WebsocketManager
-	mu                 sync.Mutex
-	reconnect          bool
-	pendingValidations sync.Map
-	Users              util.ConcurrentMap
-	Pool               *Pool
 	UpstreamManager    *UpstreamManager
 	HealthCollector    *HealthCollector
+	pendingValidations sync.Map
+	mu                 sync.Mutex
+	Users              util.ConcurrentMap
+	reconnect          bool
 }
 
-func NewWorker(baseURL, workerID, apiKey string) *Worker {
+func NewWorker(workerID, baseURL, apiKey string) *Worker {
 	workerUUID, _ := uuid.Parse(workerID)
-	upstreamMgr := NewUpstreamManager()
+	upstreamManager := NewUpstreamManager()
 	return &Worker{
+		ID:              workerUUID,
 		CaptainURL:      baseURL,
-		WorkerID:        workerID,
 		APIKey:          apiKey,
 		reconnect:       true,
+		UpstreamManager: upstreamManager,
+		HealthCollector: NewHealthCollector(workerUUID, "", "", upstreamManager),
 		Users:           util.NewConcurrentMap(),
-		UpstreamManager: upstreamMgr,
-		HealthCollector: NewHealthCollector(workerUUID, "", "", upstreamMgr),
 	}
+
 }
 
 func (c *Worker) Start() {
-	// Start the health collector for periodic sampling
+	//start healthcollector and start function for send telemantry health data for every 1hour
 	c.HealthCollector.Start()
-
-	// Start hourly health telemetry reporting
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
@@ -57,7 +56,7 @@ func (c *Worker) Start() {
 			c.SendHealthTelemetry()
 		}
 	}()
-
+	//start worker connect
 	go func() {
 		for c.reconnect {
 			if err := c.Connect(); err != nil {
@@ -65,7 +64,6 @@ func (c *Worker) Start() {
 				time.Sleep(5 * time.Second)
 				continue
 			}
-
 			log.Println("[Captain] Disconnected. Reconnecting in 2s...")
 			time.Sleep(2 * time.Second)
 		}
@@ -103,9 +101,7 @@ func (c *Worker) Connect() error {
 		return fmt.Errorf("websocket dial failed: %v", err)
 	}
 
-	c.mu.Lock()
 	c.WebsocketManager = NewWebsocketManager(c, conn)
-	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
@@ -127,7 +123,7 @@ func (c *Worker) Connect() error {
 
 func (c *Worker) login() (string, error) {
 	loginURL := fmt.Sprintf("%s/worker/ws/login", c.CaptainURL)
-	body, _ := json.Marshal(LoginRequest{WorkerID: c.WorkerID})
+	body, _ := json.Marshal(LoginRequest{WorkerID: c.ID.String()})
 
 	req, err := http.NewRequest(http.MethodPost, loginURL, bytes.NewBuffer(body))
 	if err != nil {
@@ -225,6 +221,12 @@ func (c *Worker) processConfig(payload interface{}) {
 		log.Printf("[Captain] Failed to parse config: %v", err)
 		return
 	}
+
+	c.Name = config.WorkerName
+	c.Region = config.Region
+
+	c.Pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain)
+
 	upstreams := make([]Upstream, 0)
 	for _, upstream := range config.Upstreams {
 		upstreams = append(upstreams, Upstream{
@@ -239,17 +241,11 @@ func (c *Worker) processConfig(payload interface{}) {
 			Weight:           upstream.Weight,
 		})
 	}
-	c.Pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
-
-	// Update the UpstreamManager with the new upstreams for round-robin load balancing
 	c.UpstreamManager.SetUpstreams(upstreams)
 
-	// Update worker name and region in health collector
-	c.WorkerName = config.WorkerName
-	c.Pool.Region = "" // Region will be set when Captain provides it
 	c.HealthCollector.UpdateWorkerInfo(config.WorkerName, c.Pool.Region)
 
-	log.Printf("[Captain] Configuration received for Pool: %s (Port: %d)", config.PoolTag, config.PoolPort)
+	log.Printf("[Captain] Configuration received for Pool: %s", config.PoolTag)
 	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
 }
 

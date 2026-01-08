@@ -245,7 +245,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		// Send data usage to Captain when connection closes
 		if s.worker != nil && (bytesSent > 0 || bytesReceived > 0) {
 			poolID, poolName := s.worker.GetPoolInfo()
-			workerUUID, _ := uuid.Parse(s.worker.WorkerID)
+			workerUUID, _ := uuid.Parse(s.worker.ID.String())
 			poolUUID, _ := uuid.Parse(poolID)
 
 			usage := manager.UserDataUsage{

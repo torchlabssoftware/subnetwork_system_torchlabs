@@ -32,13 +32,13 @@ func initConfig() (err error) {
 
 	//define  args
 	args := services.Args{}
-	tcpArgs := services.TCPArgs{}
 	httpArgs := services.HTTPArgs{}
 	socksArgs := services.SOCKSArgs{}
+	/*tcpArgs := services.TCPArgs{}
 	tunnelServerArgs := services.TunnelServerArgs{}
 	tunnelClientArgs := services.TunnelClientArgs{}
 	tunnelBridgeArgs := services.TunnelBridgeArgs{}
-	udpArgs := services.UDPArgs{}
+	udpArgs := services.UDPArgs{}*/
 
 	app = kingpin.New("proxy", "happy with proxy")
 	app.Author("snail").Version(APP_VERSION)
@@ -47,11 +47,6 @@ func initConfig() (err error) {
 	args.Local = app.Flag("local", "local ip:port to listen").Short('p').Default(":33080").String()
 	certTLS := app.Flag("cert", "cert file for tls").Short('C').Default("proxy.crt").String()
 	keyTLS := app.Flag("key", "key file for tls").Short('K').Default("proxy.key").String()
-
-	// Captain Server Configuration
-	captainURL := envConfig.CaptainURL
-	apiKey := envConfig.APIKey
-	workerID := app.Flag("worker-id", "Worker ID UUID").String()
 
 	//########http#########
 	http := app.Command("http", "proxy on http mode")
@@ -83,7 +78,7 @@ func initConfig() (err error) {
 	socksArgs.CheckParentInterval = socks.Flag("check-parent-interval", "check if proxy is okay every interval seconds,zero: means no check").Short('I').Default("3").Int()
 
 	//########tcp#########
-	tcp := app.Command("tcp", "proxy on tcp mode")
+	/*tcp := app.Command("tcp", "proxy on tcp mode")
 	tcpArgs.Timeout = tcp.Flag("timeout", "tcp timeout milliseconds when connect to real server or parent proxy").Short('t').Default("2000").Int()
 	tcpArgs.ParentType = tcp.Flag("parent-type", "parent protocol type <tls|tcp|udp>").Short('T').Enum("tls", "tcp", "udp")
 	tcpArgs.IsTLS = tcp.Flag("tls", "proxy on tls mode").Default("false").Bool()
@@ -112,6 +107,7 @@ func initConfig() (err error) {
 	//########tunnel-bridge#########
 	tunnelBridge := app.Command("tbridge", "proxy on tunnel bridge mode")
 	tunnelBridgeArgs.Timeout = tunnelBridge.Flag("timeout", "tcp timeout with milliseconds").Short('t').Default("2000").Int()
+	*/
 
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
@@ -119,26 +115,32 @@ func initConfig() (err error) {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
 	}
 
-	// Start Captain Client if configured
+	// worker Configuration
+	captainURL := envConfig.CaptainURL
+	apiKey := envConfig.APIKey
+	workerID := app.Flag("worker-id", "Worker ID UUID").String()
+
+	// Start worker if configured
 	var worker *manager.Worker
-	if captainURL != "" && *workerID != "" {
-		log.Printf("Starting Captain Client (URL: %s, WorkerID: %s)", captainURL, *workerID)
-		worker = manager.NewWorker(captainURL, *workerID, apiKey)
+	if captainURL != "" && *workerID != "" && apiKey != "" {
+		log.Printf("Starting worker (URL: %s, WorkerID: %s)", captainURL, *workerID)
+		worker = manager.NewWorker(*workerID, captainURL, apiKey)
 		worker.Start()
 	} else {
-		log.Println("Captain Client not configured (missing captain-url or worker-id)")
+		log.Println("worker not configured (missing captain-url or worker-id or api-key)")
 	}
 
 	//common args
 	httpArgs.Args = args
 	socksArgs.Args = args
-	tcpArgs.Args = args
+	/*tcpArgs.Args = args
 	udpArgs.Args = args
 	tunnelBridgeArgs.Args = args
 	tunnelClientArgs.Args = args
-	tunnelServerArgs.Args = args
+	tunnelServerArgs.Args = args*/
 
 	poster()
+
 	//regist services and run service
 	serviceName := kingpin.MustParse(app.Parse(os.Args[1:]))
 	services.Regist("http", services.NewHTTP(), httpArgs)

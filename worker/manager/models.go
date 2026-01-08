@@ -26,6 +26,7 @@ type LoginResponse struct {
 
 type ConfigPayload struct {
 	WorkerName    string           `json:"worker_name"`
+	Region        string           `json:"region"`
 	PoolID        uuid.UUID        `json:"pool_id"`
 	PoolTag       string           `json:"pool_tag"`
 	PoolPort      int              `json:"pool_port"`

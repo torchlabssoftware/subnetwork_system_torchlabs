@@ -16,7 +16,6 @@ type Pool struct {
 	Region        string
 	PoolPort      int
 	PoolSubdomain string
-	Upstreams     []Upstream
 }
 
 type Upstream struct {
@@ -31,13 +30,12 @@ type Upstream struct {
 	Weight           int
 }
 
-func NewPool(poolId uuid.UUID, poolTag string, poolPort int, poolSubdomain string, upstreams []Upstream) *Pool {
+func NewPool(poolId uuid.UUID, poolTag string, poolPort int, poolSubdomain string) *Pool {
 	pool := &Pool{
 		PoolId:        poolId,
 		PoolTag:       poolTag,
 		PoolPort:      poolPort,
 		PoolSubdomain: poolSubdomain,
-		Upstreams:     upstreams,
 		Region:        "",
 	}
 	return pool
