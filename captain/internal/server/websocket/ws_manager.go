@@ -221,6 +221,7 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 
 	config := ConfigPayload{
 		WorkerName:    firstRow.WorkerName,
+		Region:        firstRow.Region,
 		PoolID:        firstRow.PoolID,
 		PoolTag:       firstRow.PoolTag,
 		PoolPort:      int(firstRow.PoolPort),

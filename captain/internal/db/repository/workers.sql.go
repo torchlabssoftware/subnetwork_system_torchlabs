@@ -222,10 +222,11 @@ func (q *Queries) GetWorkerByName(ctx context.Context, name string) (GetWorkerBy
 const getWorkerPoolConfig = `-- name: GetWorkerPoolConfig :many
 SELECT 
     w.name AS worker_name,
+    r.name As region,
     p.id AS pool_id,
     p.tag AS pool_tag,
-    p.port AS pool_port,
     p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
     u.id AS upstream_id,
     u.tag AS upstream_tag,
     u.domain AS upstream_address,
@@ -239,15 +240,17 @@ FROM worker w
 JOIN pool p ON w.pool_id = p.id
 JOIN pool_upstream_weight puw ON p.id = puw.pool_id
 JOIN upstream u ON puw.upstream_id = u.id
+join region r on r.id = w.region_id
 WHERE w.id = $1
 `
 
 type GetWorkerPoolConfigRow struct {
 	WorkerName       string
+	Region           string
 	PoolID           uuid.UUID
 	PoolTag          string
-	PoolPort         int32
 	PoolSubdomain    string
+	PoolPort         int32
 	UpstreamID       uuid.UUID
 	UpstreamTag      string
 	UpstreamAddress  string
@@ -270,10 +273,11 @@ func (q *Queries) GetWorkerPoolConfig(ctx context.Context, id uuid.UUID) ([]GetW
 		var i GetWorkerPoolConfigRow
 		if err := rows.Scan(
 			&i.WorkerName,
+			&i.Region,
 			&i.PoolID,
 			&i.PoolTag,
-			&i.PoolPort,
 			&i.PoolSubdomain,
+			&i.PoolPort,
 			&i.UpstreamID,
 			&i.UpstreamTag,
 			&i.UpstreamAddress,
