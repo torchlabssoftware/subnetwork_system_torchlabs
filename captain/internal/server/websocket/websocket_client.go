@@ -69,7 +69,7 @@ func (w *Worker) ReadMessage() {
 			log.Println("Error handleing message: ", err)
 			w.egress <- Event{
 				Type:    "error",
-				Payload: errorPayload{Success: false, Payload: err.Error()},
+				Payload: replyPayload{Success: false, Payload: err.Error()},
 			}
 		}
 	}
