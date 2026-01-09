@@ -42,11 +42,13 @@ func (s *HTTP) InitService() {
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
+
 func (s *HTTP) StopService() {
 	if s.outPool.Pool != nil {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
+
 func (s *HTTP) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(HTTPArgs)
 	s.worker = worker
@@ -78,6 +80,7 @@ func (s *HTTP) Start(args interface{}, worker *manager.Worker) (err error) {
 func (s *HTTP) Clean() {
 	s.StopService()
 }
+
 func (s *HTTP) callback(inConn net.Conn) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -245,7 +248,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		// Send data usage to Captain when connection closes
 		if s.worker != nil && (bytesSent > 0 || bytesReceived > 0) {
 			poolID, poolName := s.worker.GetPoolInfo()
-			workerUUID, _ := uuid.Parse(s.worker.WorkerID)
+			workerUUID, _ := uuid.Parse(s.worker.ID.String())
 			poolUUID, _ := uuid.Parse(poolID)
 
 			usage := manager.UserDataUsage{
@@ -288,9 +291,11 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	return
 
 }
+
 func (s *HTTP) OutToUDP(inConn *net.Conn) (err error) {
 	return
 }
+
 func (s *HTTP) InitOutConnPool() {
 	if *s.cfg.ParentType == TYPE_TLS || *s.cfg.ParentType == TYPE_TCP {
 		//dur int, isTLS bool, certBytes, keyBytes []byte,
@@ -307,6 +312,7 @@ func (s *HTTP) InitOutConnPool() {
 		)
 	}
 }
+
 func (s *HTTP) InitBasicAuth() (err error) {
 	s.basicAuth = utils.NewBasicAuth()
 	if *s.cfg.AuthFile != "" {
@@ -324,9 +330,7 @@ func (s *HTTP) InitBasicAuth() (err error) {
 	}
 	return
 }
-func (s *HTTP) IsBasicAuth() bool {
-	return *s.cfg.AuthFile != "" || len(*s.cfg.Auth) > 0
-}
+
 func (s *HTTP) IsDeadLoop(inLocalAddr string, host string) bool {
 	inIP, inPort, err := net.SplitHostPort(inLocalAddr)
 	if err != nil {

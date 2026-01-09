@@ -184,6 +184,7 @@ func NewBasicAuth() BasicAuth {
 		data: NewConcurrentMap(),
 	}
 }
+
 func (ba *BasicAuth) AddFromFile(file string) (n int, err error) {
 	_content, err := os.ReadFile(file)
 	if err != nil {
@@ -286,6 +287,7 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, basicAuth *BasicAuth) (req HT
 	}
 	return
 }
+
 func (req *HTTPRequest) HTTP() (err error) {
 	err = req.BasicAuth()
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,40 +18,47 @@ import (
 )
 
 type Worker struct {
-	WorkerID           string
-	WorkerName         string
+	ID                 uuid.UUID
+	Name               string
 	Region             string
+	Pool               *Pool
 	CaptainURL         string
 	APIKey             string
 	WebsocketManager   *WebsocketManager
-	mu                 sync.Mutex
-	reconnect          bool
-	pendingValidations sync.Map
-	Users              util.ConcurrentMap
-	Pool               *Pool
 	UpstreamManager    *UpstreamManager
 	HealthCollector    *HealthCollector
+	pendingValidations sync.Map
+	mu                 sync.Mutex
+	Users              util.ConcurrentMap
+	reconnect          bool
 }
 
-func NewWorker(baseURL, workerID, apiKey string) *Worker {
+type User struct {
+	ID          uuid.UUID
+	Username    string
+	Status      string
+	IpWhitelist []string
+	Pools       []PoolLimit
+}
+
+func NewWorker(workerID, baseURL, apiKey string) *Worker {
 	workerUUID, _ := uuid.Parse(workerID)
-	upstreamMgr := NewUpstreamManager()
+	upstreamManager := NewUpstreamManager()
 	return &Worker{
+		ID:              workerUUID,
 		CaptainURL:      baseURL,
-		WorkerID:        workerID,
 		APIKey:          apiKey,
 		reconnect:       true,
+		UpstreamManager: upstreamManager,
+		HealthCollector: NewHealthCollector(workerUUID, "", "", upstreamManager),
 		Users:           util.NewConcurrentMap(),
-		UpstreamManager: upstreamMgr,
-		HealthCollector: NewHealthCollector(workerUUID, "", "", upstreamMgr),
 	}
+
 }
 
 func (c *Worker) Start() {
-	// Start the health collector for periodic sampling
+	//start healthcollector and start function for send telemantry health data for every 1hour
 	c.HealthCollector.Start()
-
-	// Start hourly health telemetry reporting
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
@@ -57,7 +66,7 @@ func (c *Worker) Start() {
 			c.SendHealthTelemetry()
 		}
 	}()
-
+	//start worker connect
 	go func() {
 		for c.reconnect {
 			if err := c.Connect(); err != nil {
@@ -65,7 +74,6 @@ func (c *Worker) Start() {
 				time.Sleep(5 * time.Second)
 				continue
 			}
-
 			log.Println("[Captain] Disconnected. Reconnecting in 2s...")
 			time.Sleep(2 * time.Second)
 		}
@@ -103,9 +111,7 @@ func (c *Worker) Connect() error {
 		return fmt.Errorf("websocket dial failed: %v", err)
 	}
 
-	c.mu.Lock()
 	c.WebsocketManager = NewWebsocketManager(c, conn)
-	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
@@ -127,7 +133,7 @@ func (c *Worker) Connect() error {
 
 func (c *Worker) login() (string, error) {
 	loginURL := fmt.Sprintf("%s/worker/ws/login", c.CaptainURL)
-	body, _ := json.Marshal(LoginRequest{WorkerID: c.WorkerID})
+	body, _ := json.Marshal(WorkerLoginRequest{WorkerID: c.ID.String()})
 
 	req, err := http.NewRequest(http.MethodPost, loginURL, bytes.NewBuffer(body))
 	if err != nil {
@@ -147,7 +153,7 @@ func (c *Worker) login() (string, error) {
 		return "", fmt.Errorf("server returned status: %d", resp.StatusCode)
 	}
 
-	var loginResp LoginResponse
+	var loginResp WorkerLoginResponse
 	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
 		return "", err
 	}
@@ -176,9 +182,9 @@ func (c *Worker) VerifyUser(user, pass string) bool {
 	c.pendingValidations.Store(user, respChan)
 	defer c.pendingValidations.Delete(user)
 
-	payload := map[string]string{
-		"username": user,
-		"password": pass,
+	payload := UserLoginPayload{
+		Username: user,
+		Password: pass,
 	}
 
 	c.WebsocketManager.egress <- Event{Type: "verify_user", Payload: payload}
@@ -194,39 +200,66 @@ func (c *Worker) VerifyUser(user, pass string) bool {
 
 func (c *Worker) processVerifyUserResponse(payload interface{}) {
 	data, _ := json.Marshal(payload)
-	var resp struct {
-		Success bool        `json:"success"`
-		Payload UserPayload `json:"payload"`
-	}
+	var resp Response
 	if err := json.Unmarshal(data, &resp); err != nil {
 		log.Printf("[Captain] Failed to parse verify_user_response: %v", err)
 		return
 	}
-
-	if ch, ok := c.pendingValidations.Load(resp.Payload.Username); ok {
+	if !resp.Success {
+		return
+	}
+	data, _ = json.Marshal(resp.Payload)
+	var userPayload UserPayload
+	if err := json.Unmarshal(data, &userPayload); err != nil {
+		log.Printf("[Captain] Failed to parse UserPayload: %v", err)
+		return
+	}
+	if ch, ok := c.pendingValidations.Load(userPayload.Username); ok {
 		ch.(chan bool) <- resp.Success
-		if resp.Success {
-			user := &User{
-				ID:          resp.Payload.ID,
-				Status:      resp.Payload.Status,
-				IpWhitelist: resp.Payload.IpWhitelist,
-				Pools:       resp.Payload.Pools,
-			}
-			c.Users.Set(resp.Payload.Username, user)
-			return
+		pools := make([]PoolLimit, 0)
+		for _, pool := range userPayload.Pools {
+			tag := strings.Split(pool, ":")
+			DataLimit, _ := strconv.Atoi(tag[1])
+			DataUsage, _ := strconv.Atoi(tag[2])
+			pools = append(pools, PoolLimit{
+				Tag:       tag[0],
+				DataLimit: DataLimit,
+				DataUsage: DataUsage,
+			})
 		}
+		user := &User{
+			ID:          userPayload.ID,
+			Username:    userPayload.Username,
+			Status:      userPayload.Status,
+			IpWhitelist: userPayload.IpWhitelist,
+			Pools:       pools,
+		}
+		c.Users.Set(user.Username, user)
+		return
 	}
 }
 
 func (c *Worker) processConfig(payload interface{}) {
 	data, _ := json.Marshal(payload)
-	var config ConfigPayload
-	if err := json.Unmarshal(data, &config); err != nil {
+	var resp Response
+	if err := json.Unmarshal(data, &resp); err != nil {
 		log.Printf("[Captain] Failed to parse config: %v", err)
 		return
 	}
+	if !resp.Success {
+		return
+	}
+	data, _ = json.Marshal(resp.Payload)
+	var cfg ConfigPayload
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("[Captain] Failed to parse ConfigPayload: %v", err)
+		return
+	}
+	c.Name = cfg.WorkerName
+	c.Region = cfg.Region
+	c.Pool = NewPool(cfg.PoolID, cfg.PoolTag, cfg.PoolPort, cfg.PoolSubdomain)
 	upstreams := make([]Upstream, 0)
-	for _, upstream := range config.Upstreams {
+	for _, upstream := range cfg.Upstreams {
 		upstreams = append(upstreams, Upstream{
 			UpstreamID:       upstream.UpstreamID,
 			UpstreamTag:      upstream.UpstreamTag,
@@ -239,21 +272,12 @@ func (c *Worker) processConfig(payload interface{}) {
 			Weight:           upstream.Weight,
 		})
 	}
-	c.Pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
-
-	// Update the UpstreamManager with the new upstreams for round-robin load balancing
 	c.UpstreamManager.SetUpstreams(upstreams)
-
-	// Update worker name and region in health collector
-	c.WorkerName = config.WorkerName
-	c.Pool.Region = "" // Region will be set when Captain provides it
-	c.HealthCollector.UpdateWorkerInfo(config.WorkerName, c.Pool.Region)
-
-	log.Printf("[Captain] Configuration received for Pool: %s (Port: %d)", config.PoolTag, config.PoolPort)
-	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
+	c.HealthCollector.UpdateWorkerInfo(cfg.WorkerName, c.Pool.Region)
+	log.Printf("[Captain] Configuration received for Pool: %s", cfg.PoolTag)
+	log.Printf("[Captain] Upstreams count: %d", len(cfg.Upstreams))
 }
 
-// GetPoolInfo returns the current pool ID and name
 func (c *Worker) GetPoolInfo() (poolID, poolName string) {
 	if c.Pool != nil {
 		return c.Pool.PoolId.String(), c.Pool.PoolTag
