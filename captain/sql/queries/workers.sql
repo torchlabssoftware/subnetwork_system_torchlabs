@@ -57,10 +57,11 @@ WHERE w.id = $1;
 -- name: GetWorkerPoolConfig :many
 SELECT 
     w.name AS worker_name,
+    r.name As region,
     p.id AS pool_id,
     p.tag AS pool_tag,
-    p.port AS pool_port,
     p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
     u.id AS upstream_id,
     u.tag AS upstream_tag,
     u.domain AS upstream_address,
@@ -74,6 +75,7 @@ FROM worker w
 JOIN pool p ON w.pool_id = p.id
 JOIN pool_upstream_weight puw ON p.id = puw.pool_id
 JOIN upstream u ON puw.upstream_id = u.id
+join region r on r.id = w.region_id
 WHERE w.id = $1;
 
 -- name: UpdateWorkerLastSeen :exec

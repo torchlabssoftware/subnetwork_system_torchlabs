@@ -73,9 +73,9 @@ INSERT INTO pool (tag, region_id, subdomain, port) VALUES
 ('iproyaleu',        (SELECT id FROM region WHERE name='Europe'),        'iproyal.eu',       8001),
 ('iproyalasia',      (SELECT id FROM region WHERE name='Asia'),          'iproyal.asia',     8002),
 
-('geonodeusa',       (SELECT id FROM region WHERE name='North America'), '34.67.96.169',     9000),
-('geonodeeu',        (SELECT id FROM region WHERE name='Europe'),        '34.88.82.214',     9001),
-('geonodeasia',      (SELECT id FROM region WHERE name='Asia'),          '34.131.224.206',   9002);
+('geonodeusa',       (SELECT id FROM region WHERE name='North America'), '136.116.66.60',     9000),
+('geonodeeu',        (SELECT id FROM region WHERE name='Europe'),        '34.88.145.246',     9001),
+('geonodeasia',      (SELECT id FROM region WHERE name='Asia'),          '34.131.224.30',   9002);
 
 ----------------------------------------------------------
 -- 7. Assign Users to Pools
@@ -129,9 +129,9 @@ JOIN upstream u ON u.tag = w.upstream_tag;
 -- 10. Workers
 ----------------------------------------------------------
 INSERT INTO worker (name, region_id, ip_address, status, pool_id, port, last_seen) VALUES
-('worker-usa-1',   (SELECT id FROM region WHERE name='North America'), '34.67.96.169', 'active', (SELECT id FROM pool WHERE tag='geonodeusa'),   38080, NOW()),
-('worker-eu-1',    (SELECT id FROM region WHERE name='Europe'),        '34.88.82.214', 'active', (SELECT id FROM pool WHERE tag='geonodeeu'),    38081, NOW()),
-('worker-asia-1',  (SELECT id FROM region WHERE name='Asia'),          '34.131.224.206','active', (SELECT id FROM pool WHERE tag='geonodeasia'), 38082, NOW());
+('worker-usa-1',   (SELECT id FROM region WHERE name='North America'), '136.116.66.60', 'active', (SELECT id FROM pool WHERE tag='geonodeusa'),   38080, NOW()),
+('worker-eu-1',    (SELECT id FROM region WHERE name='Europe'),        '34.88.145.246', 'active', (SELECT id FROM pool WHERE tag='geonodeeu'),    38081, NOW()),
+('worker-asia-1',  (SELECT id FROM region WHERE name='Asia'),          '34.131.224.30','active', (SELECT id FROM pool WHERE tag='geonodeasia'), 38082, NOW());
 
 ----------------------------------------------------------
 -- 11. Worker Domains
