@@ -128,7 +128,7 @@ SELECT
     u.password,
     u.status,
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
-    COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL), '{}')::text[] AS pools
+    COALESCE(ARRAY_AGG(DISTINCT (p.tag || ':' || up.data_limit || ':' ||up.data_usage)) FILTER (WHERE p.tag IS NOT NULL AND up.data_limit IS NOT NULL), '{}')::text[] AS pools
 FROM "user" AS u
 LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
 LEFT JOIN user_pools AS up ON u.id = up.user_id

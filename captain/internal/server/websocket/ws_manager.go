@@ -131,7 +131,7 @@ func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
 
 	w.egress <- Event{
 		Type:    "login_success",
-		Payload: successPayload{Success: true, Payload: succcessPayload},
+		Payload: replyPayload{Success: true, Payload: succcessPayload},
 	}
 
 	return nil
@@ -245,7 +245,7 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 
 	w.egress <- Event{
 		Type:    "config",
-		Payload: config,
+		Payload: replyPayload{Success: true, Payload: config},
 	}
 
 	return nil

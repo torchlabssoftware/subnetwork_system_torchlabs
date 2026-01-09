@@ -16,12 +16,7 @@ type loginPayload struct {
 	Password string `json:"password"`
 }
 
-type successPayload struct {
-	Success bool        `json:"success"`
-	Payload interface{} `json:"payload"`
-}
-
-type errorPayload struct {
+type replyPayload struct {
 	Success bool        `json:"success"`
 	Payload interface{} `json:"payload"`
 }
