@@ -13,7 +13,6 @@ import (
 	"github.com/snail007/goproxy/utils"
 )
 
-// SOCKS5 protocol constants
 const (
 	SOCKS5_VERSION = 0x05
 
@@ -52,10 +51,6 @@ type SOCKS struct {
 	worker    *manager.Worker
 }
 
-func (s *SOCKS) SetValidator(validator func(string, string) bool) {
-	s.basicAuth.Validator = validator
-}
-
 func NewSOCKS() Service {
 	return &SOCKS{
 		outPool:   utils.OutPool{},
@@ -68,9 +63,7 @@ func NewSOCKS() Service {
 func (s *SOCKS) InitService() {
 	s.InitBasicAuth()
 	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
-
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
-
 	}
 }
 
@@ -90,7 +83,7 @@ func (s *SOCKS) Start(args interface{}, worker *manager.Worker) (err error) {
 	}*/
 
 	s.InitService()
-	s.SetValidator(worker.VerifyUser)
+	s.basicAuth.Validator = worker.VerifyUser
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -118,7 +111,6 @@ func (s *SOCKS) callback(inConn net.Conn) {
 		}
 	}()
 
-	// Handle SOCKS5 handshake
 	err := s.handleHandshake(&inConn)
 	if err != nil {
 		log.Printf("socks5 handshake error from %s: %s", inConn.RemoteAddr(), err)
@@ -194,9 +186,6 @@ func (s *SOCKS) handleHandshake(inConn *net.Conn) error {
 	if err := s.handlePasswordAuth(inConn); err != nil {
 		return err
 	}
-
-	// No auth required
-	//(*inConn).Write([]byte{SOCKS5_VERSION, SOCKS5_AUTH_NONE})
 
 	return nil
 }
@@ -326,7 +315,7 @@ func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn) (err e
 	var outConn net.Conn
 	var _outConn interface{}
 	if useProxy {
-		_outConn, err = s.outPool.Pool.Get()
+		_outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 		if err == nil {
 			outConn = _outConn.(net.Conn)
 		}

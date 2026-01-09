@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +31,14 @@ type Worker struct {
 	mu                 sync.Mutex
 	Users              util.ConcurrentMap
 	reconnect          bool
+}
+
+type User struct {
+	ID          uuid.UUID
+	Username    string
+	Status      string
+	IpWhitelist []string
+	Pools       []PoolLimit
 }
 
 func NewWorker(workerID, baseURL, apiKey string) *Worker {
@@ -123,7 +133,7 @@ func (c *Worker) Connect() error {
 
 func (c *Worker) login() (string, error) {
 	loginURL := fmt.Sprintf("%s/worker/ws/login", c.CaptainURL)
-	body, _ := json.Marshal(LoginRequest{WorkerID: c.ID.String()})
+	body, _ := json.Marshal(WorkerLoginRequest{WorkerID: c.ID.String()})
 
 	req, err := http.NewRequest(http.MethodPost, loginURL, bytes.NewBuffer(body))
 	if err != nil {
@@ -143,7 +153,7 @@ func (c *Worker) login() (string, error) {
 		return "", fmt.Errorf("server returned status: %d", resp.StatusCode)
 	}
 
-	var loginResp LoginResponse
+	var loginResp WorkerLoginResponse
 	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
 		return "", err
 	}
@@ -172,9 +182,9 @@ func (c *Worker) VerifyUser(user, pass string) bool {
 	c.pendingValidations.Store(user, respChan)
 	defer c.pendingValidations.Delete(user)
 
-	payload := map[string]string{
-		"username": user,
-		"password": pass,
+	payload := UserLoginPayload{
+		Username: user,
+		Password: pass,
 	}
 
 	c.WebsocketManager.egress <- Event{Type: "verify_user", Payload: payload}
@@ -190,45 +200,66 @@ func (c *Worker) VerifyUser(user, pass string) bool {
 
 func (c *Worker) processVerifyUserResponse(payload interface{}) {
 	data, _ := json.Marshal(payload)
-	var resp struct {
-		Success bool        `json:"success"`
-		Payload UserPayload `json:"payload"`
-	}
+	var resp Response
 	if err := json.Unmarshal(data, &resp); err != nil {
 		log.Printf("[Captain] Failed to parse verify_user_response: %v", err)
 		return
 	}
-
-	if ch, ok := c.pendingValidations.Load(resp.Payload.Username); ok {
+	if !resp.Success {
+		return
+	}
+	data, _ = json.Marshal(resp.Payload)
+	var userPayload UserPayload
+	if err := json.Unmarshal(data, &userPayload); err != nil {
+		log.Printf("[Captain] Failed to parse UserPayload: %v", err)
+		return
+	}
+	if ch, ok := c.pendingValidations.Load(userPayload.Username); ok {
 		ch.(chan bool) <- resp.Success
-		if resp.Success {
-			user := &User{
-				ID:          resp.Payload.ID,
-				Status:      resp.Payload.Status,
-				IpWhitelist: resp.Payload.IpWhitelist,
-				Pools:       resp.Payload.Pools,
-			}
-			c.Users.Set(resp.Payload.Username, user)
-			return
+		pools := make([]PoolLimit, 0)
+		for _, pool := range userPayload.Pools {
+			tag := strings.Split(pool, ":")
+			DataLimit, _ := strconv.Atoi(tag[1])
+			DataUsage, _ := strconv.Atoi(tag[2])
+			pools = append(pools, PoolLimit{
+				Tag:       tag[0],
+				DataLimit: DataLimit,
+				DataUsage: DataUsage,
+			})
 		}
+		user := &User{
+			ID:          userPayload.ID,
+			Username:    userPayload.Username,
+			Status:      userPayload.Status,
+			IpWhitelist: userPayload.IpWhitelist,
+			Pools:       pools,
+		}
+		c.Users.Set(user.Username, user)
+		return
 	}
 }
 
 func (c *Worker) processConfig(payload interface{}) {
 	data, _ := json.Marshal(payload)
-	var config ConfigPayload
-	if err := json.Unmarshal(data, &config); err != nil {
+	var resp Response
+	if err := json.Unmarshal(data, &resp); err != nil {
 		log.Printf("[Captain] Failed to parse config: %v", err)
 		return
 	}
-
-	c.Name = config.WorkerName
-	c.Region = config.Region
-
-	c.Pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain)
-
+	if !resp.Success {
+		return
+	}
+	data, _ = json.Marshal(resp.Payload)
+	var cfg ConfigPayload
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("[Captain] Failed to parse ConfigPayload: %v", err)
+		return
+	}
+	c.Name = cfg.WorkerName
+	c.Region = cfg.Region
+	c.Pool = NewPool(cfg.PoolID, cfg.PoolTag, cfg.PoolPort, cfg.PoolSubdomain)
 	upstreams := make([]Upstream, 0)
-	for _, upstream := range config.Upstreams {
+	for _, upstream := range cfg.Upstreams {
 		upstreams = append(upstreams, Upstream{
 			UpstreamID:       upstream.UpstreamID,
 			UpstreamTag:      upstream.UpstreamTag,
@@ -242,14 +273,11 @@ func (c *Worker) processConfig(payload interface{}) {
 		})
 	}
 	c.UpstreamManager.SetUpstreams(upstreams)
-
-	c.HealthCollector.UpdateWorkerInfo(config.WorkerName, c.Pool.Region)
-
-	log.Printf("[Captain] Configuration received for Pool: %s", config.PoolTag)
-	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
+	c.HealthCollector.UpdateWorkerInfo(cfg.WorkerName, c.Pool.Region)
+	log.Printf("[Captain] Configuration received for Pool: %s", cfg.PoolTag)
+	log.Printf("[Captain] Upstreams count: %d", len(cfg.Upstreams))
 }
 
-// GetPoolInfo returns the current pool ID and name
 func (c *Worker) GetPoolInfo() (poolID, poolName string) {
 	if c.Pool != nil {
 		return c.Pool.PoolId.String(), c.Pool.PoolTag

@@ -48,6 +48,11 @@ func initConfig() (err error) {
 	certTLS := app.Flag("cert", "cert file for tls").Short('C').Default("proxy.crt").String()
 	keyTLS := app.Flag("key", "key file for tls").Short('K').Default("proxy.key").String()
 
+	// worker Configuration
+	captainURL := envConfig.CaptainURL
+	apiKey := envConfig.APIKey
+	workerID := app.Flag("worker-id", "Worker ID UUID").String()
+
 	//########http#########
 	http := app.Command("http", "proxy on http mode")
 	httpArgs.LocalType = http.Flag("local-type", "parent protocol type <tls|tcp>").Default("tcp").Short('t').Enum("tls", "tcp")
@@ -69,6 +74,7 @@ func initConfig() (err error) {
 	socksArgs.ParentType = socks.Flag("parent-type", "parent protocol type <tls|tcp>").Default("tcp").Short('T').Enum("tls", "tcp")
 	socksArgs.Always = socks.Flag("always", "always use parent proxy").Default("false").Bool()
 	socksArgs.Timeout = socks.Flag("timeout", "tcp timeout milliseconds when connect to real server or parent proxy").Default("2000").Int()
+	socksArgs.HTTPTimeout = socks.Flag("http-timeout", "check domain if blocked, http request timeout milliseconds when connect to host").Default("3000").Int()
 	socksArgs.Interval = socks.Flag("interval", "check domain if blocked every interval seconds").Default("10").Int()
 	socksArgs.Blocked = socks.Flag("blocked", "blocked domain file , one domain each line").Default("blocked").Short('b').String()
 	socksArgs.Direct = socks.Flag("direct", "direct domain file , one domain each line").Default("direct").Short('d').String()
@@ -114,11 +120,6 @@ func initConfig() (err error) {
 	if *certTLS != "" && *keyTLS != "" {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
 	}
-
-	// worker Configuration
-	captainURL := envConfig.CaptainURL
-	apiKey := envConfig.APIKey
-	workerID := app.Flag("worker-id", "Worker ID UUID").String()
 
 	// Start worker if configured
 	var worker *manager.Worker

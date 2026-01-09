@@ -9,19 +9,17 @@ type Event struct {
 	Payload interface{} `json:"payload"`
 }
 
-type EventHandler func(event Event) error
-
-type ErrorPayload struct {
-	Message string      `json:"message"`
-	Payload interface{} `json:"payload"`
-}
-
-type LoginRequest struct {
+type WorkerLoginRequest struct {
 	WorkerID string `json:"worker_id"`
 }
 
-type LoginResponse struct {
+type WorkerLoginResponse struct {
 	Otp string `json:"otp"`
+}
+
+type Response struct {
+	Success bool        `json:"success"`
+	Payload interface{} `json:"payload"`
 }
 
 type ConfigPayload struct {
@@ -46,6 +44,11 @@ type UpstreamConfig struct {
 	Weight           int       `json:"weight"`
 }
 
+type UserLoginPayload struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 type UserPayload struct {
 	ID          uuid.UUID `json:"id"`
 	Username    string    `json:"username"`
@@ -55,11 +58,10 @@ type UserPayload struct {
 	Pools       []string  `json:"pools"`
 }
 
-type User struct {
-	ID          uuid.UUID
-	Status      string
-	IpWhitelist []string
-	Pools       []string
+type PoolLimit struct {
+	Tag       string
+	DataLimit int
+	DataUsage int
 }
 
 // UserDataUsage tracks per-user data usage for reporting to Captain
