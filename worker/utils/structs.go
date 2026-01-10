@@ -174,7 +174,7 @@ func (c *Checker) Add(address string, isHTTPS bool, method, URL string, data []b
 	c.data.SetIfAbsent(item.Host, item)
 }
 
-type BasicAuth struct {
+/*type BasicAuth struct {
 	data      ConcurrentMap
 	Validator func(string, string) bool
 }
@@ -237,7 +237,7 @@ func (ba *BasicAuth) Check(userpass string) (ok bool) {
 func (ba *BasicAuth) Total() (n int) {
 	n = ba.data.Count()
 	return
-}
+}*/
 
 type HTTPRequest struct {
 	HeadBuf   []byte
@@ -246,14 +246,15 @@ type HTTPRequest struct {
 	Method    string
 	URL       string
 	hostOrURL string
-	basicAuth *BasicAuth
+	Validator func(string, string) bool
 }
 
-func NewHTTPRequest(inConn *net.Conn, bufSize int, basicAuth *BasicAuth) (req HTTPRequest, err error) {
+func NewHTTPRequest(inConn *net.Conn, bufSize int, validator func(string, string) bool) (req HTTPRequest, err error) {
 	buf := make([]byte, bufSize)
 	len := 0
 	req = HTTPRequest{
-		conn: inConn,
+		conn:      inConn,
+		Validator: validator,
 	}
 	len, err = (*inConn).Read(buf[:])
 	if err != nil {
@@ -277,7 +278,6 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, basicAuth *BasicAuth) (req HT
 		return
 	}
 	req.Method = strings.ToUpper(req.Method)
-	req.basicAuth = basicAuth
 	log.Printf("%s:%s", req.Method, req.hostOrURL)
 
 	if req.IsHTTPS() {
@@ -347,7 +347,12 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 		return
 	}
 
-	authOk := (*req.basicAuth).Check(string(user))
+	//use manager for authenticate user
+	authOk := false
+	u := strings.Split(strings.Trim(string(user), " "), ":")
+	if req.Validator != nil {
+		authOk = req.Validator(u[0], u[1])
+	}
 
 	if !authOk {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")

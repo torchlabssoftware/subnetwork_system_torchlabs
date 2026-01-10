@@ -21,23 +21,21 @@ import (
 )
 
 type HTTP struct {
-	outPool   utils.OutPool
-	cfg       HTTPArgs
-	checker   utils.Checker
-	basicAuth utils.BasicAuth
-	worker    *manager.Worker
+	outPool utils.OutPool
+	cfg     HTTPArgs
+	checker utils.Checker
+	worker  *manager.Worker
 }
 
 func NewHTTP() Service {
 	return &HTTP{
-		outPool:   utils.OutPool{},
-		cfg:       HTTPArgs{},
-		checker:   utils.Checker{},
-		basicAuth: utils.BasicAuth{},
+		outPool: utils.OutPool{},
+		cfg:     HTTPArgs{},
+		checker: utils.Checker{},
 	}
 }
+
 func (s *HTTP) InitService() {
-	s.InitBasicAuth()
 	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
@@ -60,7 +58,6 @@ func (s *HTTP) Start(args interface{}, worker *manager.Worker) (err error) {
 	}*/
 
 	s.InitService()
-	s.basicAuth.Validator = worker.VerifyUser
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -87,7 +84,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 			log.Printf("http(s) conn handler crashed with err : %s \nstack: %s", err, string(debug.Stack()))
 		}
 	}()
-	req, err := utils.NewHTTPRequest(&inConn, 4096, &s.basicAuth)
+	req, err := utils.NewHTTPRequest(&inConn, 4096, s.worker.VerifyUser)
 	if err != nil {
 		if err != io.EOF {
 			log.Printf("decoder error , form %s, ERR:%s", inConn.RemoteAddr(), err)
@@ -311,24 +308,6 @@ func (s *HTTP) InitOutConnPool() {
 			*s.cfg.PoolSize*2,
 		)
 	}
-}
-
-func (s *HTTP) InitBasicAuth() (err error) {
-	s.basicAuth = utils.NewBasicAuth()
-	if *s.cfg.AuthFile != "" {
-		var n = 0
-		n, err = s.basicAuth.AddFromFile(*s.cfg.AuthFile)
-		if err != nil {
-			err = fmt.Errorf("auth-file ERR:%s", err)
-			return
-		}
-		log.Printf("auth data added from file %d , total:%d", n, s.basicAuth.Total())
-	}
-	if len(*s.cfg.Auth) > 0 {
-		n := s.basicAuth.Add(*s.cfg.Auth)
-		log.Printf("auth data added %d, total:%d", n, s.basicAuth.Total())
-	}
-	return
 }
 
 func (s *HTTP) IsDeadLoop(inLocalAddr string, host string) bool {

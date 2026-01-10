@@ -44,24 +44,21 @@ const (
 )
 
 type SOCKS struct {
-	outPool   utils.OutPool
-	cfg       SOCKSArgs
-	checker   utils.Checker
-	basicAuth utils.BasicAuth
-	worker    *manager.Worker
+	outPool utils.OutPool
+	cfg     SOCKSArgs
+	checker utils.Checker
+	worker  *manager.Worker
 }
 
 func NewSOCKS() Service {
 	return &SOCKS{
-		outPool:   utils.OutPool{},
-		cfg:       SOCKSArgs{},
-		checker:   utils.Checker{},
-		basicAuth: utils.BasicAuth{},
+		outPool: utils.OutPool{},
+		cfg:     SOCKSArgs{},
+		checker: utils.Checker{},
 	}
 }
 
 func (s *SOCKS) InitService() {
-	s.InitBasicAuth()
 	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
@@ -83,7 +80,6 @@ func (s *SOCKS) Start(args interface{}, worker *manager.Worker) (err error) {
 	}*/
 
 	s.InitService()
-	s.basicAuth.Validator = worker.VerifyUser
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -223,11 +219,12 @@ func (s *SOCKS) handlePasswordAuth(inConn *net.Conn) error {
 	}
 
 	// Validate credentials
-	userpass := fmt.Sprintf("%s:%s", string(username), string(password))
-	if !s.basicAuth.Check(userpass) {
+	if !s.worker.VerifyUser(string(username), string(password)) {
 		(*inConn).Write([]byte{0x01, 0x01}) // Auth failed
 		return fmt.Errorf("authentication failed for user: %s", string(username))
 	}
+
+	s.worker.VerifyUser(string(username), string(password))
 
 	log.Printf("socks5 auth success for user: %s", string(username))
 	(*inConn).Write([]byte{0x01, 0x00}) // Auth success
@@ -378,24 +375,6 @@ func (s *SOCKS) InitOutConnPool() {
 			*s.cfg.PoolSize*2,
 		)
 	}
-}
-
-func (s *SOCKS) InitBasicAuth() (err error) {
-	s.basicAuth = utils.NewBasicAuth()
-	if *s.cfg.AuthFile != "" {
-		var n = 0
-		n, err = s.basicAuth.AddFromFile(*s.cfg.AuthFile)
-		if err != nil {
-			err = fmt.Errorf("auth-file ERR:%s", err)
-			return
-		}
-		log.Printf("auth data added from file %d , total:%d", n, s.basicAuth.Total())
-	}
-	if len(*s.cfg.Auth) > 0 {
-		n := s.basicAuth.Add(*s.cfg.Auth)
-		log.Printf("auth data added %d, total:%d", n, s.basicAuth.Total())
-	}
-	return
 }
 
 func (s *SOCKS) IsBasicAuth() bool {
