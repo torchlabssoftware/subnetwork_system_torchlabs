@@ -219,12 +219,12 @@ func (s *SOCKS) handlePasswordAuth(inConn *net.Conn) error {
 	}
 
 	// Validate credentials
-	if !s.worker.VerifyUser(string(username), string(password)) {
+	if !s.worker.UserManager.VerifyUser(string(username), string(password)) {
 		(*inConn).Write([]byte{0x01, 0x01}) // Auth failed
 		return fmt.Errorf("authentication failed for user: %s", string(username))
 	}
 
-	s.worker.VerifyUser(string(username), string(password))
+	s.worker.UserManager.VerifyUser(string(username), string(password))
 
 	log.Printf("socks5 auth success for user: %s", string(username))
 	(*inConn).Write([]byte{0x01, 0x00}) // Auth success

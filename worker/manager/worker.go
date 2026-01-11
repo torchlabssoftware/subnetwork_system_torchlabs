@@ -7,38 +7,27 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	util "github.com/snail007/goproxy/utils"
 )
 
 type Worker struct {
-	ID                 uuid.UUID
-	Name               string
-	Region             string
-	Pool               *Pool
-	CaptainURL         string
-	APIKey             string
-	WebsocketManager   *WebsocketManager
-	UpstreamManager    *UpstreamManager
-	HealthCollector    *HealthCollector
-	pendingValidations sync.Map
-	mu                 sync.Mutex
-	Users              util.ConcurrentMap
-	reconnect          bool
-}
-
-type User struct {
-	ID          uuid.UUID
-	Username    string
-	Status      string
-	IpWhitelist []string
-	Pools       []PoolLimit
+	ID               uuid.UUID
+	Name             string
+	Region           string
+	Pool             *Pool
+	CaptainURL       string
+	APIKey           string
+	WebsocketClient  *WebsocketClient
+	websocketManager *WebsocketManager
+	UpstreamManager  *UpstreamManager
+	HealthCollector  *HealthCollector
+	UserManager      *UserManager
+	mu               sync.Mutex
+	reconnect        bool
 }
 
 func NewWorker(workerID, baseURL, apiKey string) *Worker {
@@ -51,7 +40,6 @@ func NewWorker(workerID, baseURL, apiKey string) *Worker {
 		reconnect:       true,
 		UpstreamManager: upstreamManager,
 		HealthCollector: NewHealthCollector(workerUUID, "", "", upstreamManager),
-		Users:           util.NewConcurrentMap(),
 	}
 
 }
@@ -111,12 +99,17 @@ func (c *Worker) Connect() error {
 		return fmt.Errorf("websocket dial failed: %v", err)
 	}
 
-	c.WebsocketManager = NewWebsocketManager(c, conn)
+	c.websocketManager = NewWebsocketManager(c.websocketManager.userManager, c.websocketManager.upstreamManager, c.websocketManager.healthCollector, c)
+	c.WebsocketClient = NewWebsocketClient(conn, c.websocketManager.HandleEvent)
+
+	c.UserManager = NewUserManager(func(event Event) {
+		c.WebsocketClient.egress <- event
+	})
 
 	defer func() {
 		c.mu.Lock()
-		c.WebsocketManager.Connection.Close()
-		c.WebsocketManager = nil
+		c.WebsocketClient.Connection.Close()
+		c.WebsocketClient = nil
 		c.mu.Unlock()
 	}()
 
@@ -124,8 +117,8 @@ func (c *Worker) Connect() error {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go c.WebsocketManager.ReadMessage(&wg)
-	go c.WebsocketManager.WriteMessage(&wg)
+	go c.WebsocketClient.ReadMessage(&wg)
+	go c.WebsocketClient.WriteMessage(&wg)
 	wg.Wait()
 
 	return fmt.Errorf("connection closed")
@@ -161,100 +154,7 @@ func (c *Worker) login() (string, error) {
 	return loginResp.Otp, nil
 }
 
-func (c *Worker) HandleEvent(event Event) {
-	log.Printf("[Captain] Received event: %s", event.Type)
-
-	switch event.Type {
-	case "config":
-		c.processConfig(event.Payload)
-	case "login_success":
-		c.processVerifyUserResponse(event.Payload)
-	case "error":
-		log.Printf("[Captain] Error from server: %v", event.Payload)
-	default:
-		log.Printf("[Captain] Unhandled event type: %s", event.Type)
-	}
-}
-
-func (c *Worker) VerifyUser(user, pass string) bool {
-	respChan := make(chan bool)
-
-	c.pendingValidations.Store(user, respChan)
-	defer c.pendingValidations.Delete(user)
-
-	payload := UserLoginPayload{
-		Username: user,
-		Password: pass,
-	}
-
-	c.WebsocketManager.egress <- Event{Type: "verify_user", Payload: payload}
-
-	select {
-	case result := <-respChan:
-		return result
-	case <-time.After(5 * time.Second):
-		log.Printf("[Captain] VerifyUser timeout for %s", user)
-		return false
-	}
-}
-
-func (c *Worker) processVerifyUserResponse(payload interface{}) {
-	data, _ := json.Marshal(payload)
-	var resp Response
-	if err := json.Unmarshal(data, &resp); err != nil {
-		log.Printf("[Captain] Failed to parse verify_user_response: %v", err)
-		return
-	}
-	if !resp.Success {
-		return
-	}
-	data, _ = json.Marshal(resp.Payload)
-	var userPayload UserPayload
-	if err := json.Unmarshal(data, &userPayload); err != nil {
-		log.Printf("[Captain] Failed to parse UserPayload: %v", err)
-		return
-	}
-	if ch, ok := c.pendingValidations.Load(userPayload.Username); ok {
-		ch.(chan bool) <- resp.Success
-		pools := make([]PoolLimit, 0)
-		for _, pool := range userPayload.Pools {
-			tag := strings.Split(pool, ":")
-			DataLimit, _ := strconv.Atoi(tag[1])
-			DataUsage, _ := strconv.Atoi(tag[2])
-			pools = append(pools, PoolLimit{
-				Tag:       tag[0],
-				DataLimit: DataLimit,
-				DataUsage: DataUsage,
-			})
-		}
-		user := &User{
-			ID:          userPayload.ID,
-			Username:    userPayload.Username,
-			Status:      userPayload.Status,
-			IpWhitelist: userPayload.IpWhitelist,
-			Pools:       pools,
-		}
-		c.Users.Set(user.Username, user)
-		return
-	}
-}
-
-func (c *Worker) processConfig(payload interface{}) {
-	data, _ := json.Marshal(payload)
-	var resp Response
-	if err := json.Unmarshal(data, &resp); err != nil {
-		log.Printf("[Captain] Failed to parse config: %v", err)
-		return
-	}
-	if !resp.Success {
-		return
-	}
-	data, _ = json.Marshal(resp.Payload)
-	var cfg ConfigPayload
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		log.Printf("[Captain] Failed to parse ConfigPayload: %v", err)
-		return
-	}
+func (c *Worker) processConfig(cfg ConfigPayload) {
 	c.Name = cfg.WorkerName
 	c.Region = cfg.Region
 	c.Pool = NewPool(cfg.PoolID, cfg.PoolTag, cfg.PoolPort, cfg.PoolSubdomain)
@@ -287,7 +187,7 @@ func (c *Worker) GetPoolInfo() (poolID, poolName string) {
 
 // SendDataUsage sends a user data usage event to Captain via WebSocket
 func (c *Worker) SendDataUsage(usage UserDataUsage) {
-	if c.WebsocketManager == nil {
+	if c.WebsocketClient == nil {
 		log.Printf("[DataUsage] WebSocket not connected, cannot send data usage")
 		return
 	}
@@ -297,14 +197,14 @@ func (c *Worker) SendDataUsage(usage UserDataUsage) {
 		Payload: usage,
 	}
 
-	c.WebsocketManager.egress <- event
+	c.WebsocketClient.egress <- event
 	log.Printf("[DataUsage] Sent usage: user=%s, bytes_sent=%d, bytes_received=%d, dest=%s:%d",
 		usage.Username, usage.BytesSent, usage.BytesReceived, usage.DestinationHost, usage.DestinationPort)
 }
 
 // SendHealthTelemetry sends worker health telemetry to Captain via WebSocket
 func (c *Worker) SendHealthTelemetry() {
-	if c.WebsocketManager == nil {
+	if c.WebsocketClient == nil {
 		log.Printf("[HealthTelemetry] WebSocket not connected, cannot send health telemetry")
 		return
 	}
@@ -315,7 +215,7 @@ func (c *Worker) SendHealthTelemetry() {
 		Payload: health,
 	}
 
-	c.WebsocketManager.egress <- event
+	c.WebsocketClient.egress <- event
 	log.Printf("[HealthTelemetry] Sent health: status=%s, cpu=%.2f%%, mem=%.2f%%, active_conns=%d, throughput=%d bytes/sec",
 		health.Status, health.CpuUsage, health.MemoryUsage, health.ActiveConnections, health.BytesThroughputPerSec)
 }

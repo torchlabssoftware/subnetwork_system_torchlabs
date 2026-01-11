@@ -8,21 +8,21 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type WebsocketManager struct {
-	Worker     *Worker
+type WebsocketClient struct {
 	Connection *websocket.Conn
 	egress     chan Event
+	onEvent    func(Event)
 }
 
-func NewWebsocketManager(worker *Worker, conn *websocket.Conn) *WebsocketManager {
-	return &WebsocketManager{
+func NewWebsocketClient(conn *websocket.Conn, onEvent func(Event)) *WebsocketClient {
+	return &WebsocketClient{
 		Connection: conn,
-		Worker:     worker,
 		egress:     make(chan Event),
+		onEvent:    onEvent,
 	}
 }
 
-func (w *WebsocketManager) ReadMessage(wg *sync.WaitGroup) {
+func (w *WebsocketClient) ReadMessage(wg *sync.WaitGroup) {
 	defer func() {
 		close(w.egress)
 		w.Connection.Close()
@@ -39,18 +39,18 @@ func (w *WebsocketManager) ReadMessage(wg *sync.WaitGroup) {
 			break
 		}
 
-		var request Event
+		var event Event
 
-		if err := json.Unmarshal(payload, &request); err != nil {
+		if err := json.Unmarshal(payload, &event); err != nil {
 			log.Printf("errror marshelling event: %v", err)
 			break
 		}
 
-		w.Worker.HandleEvent(request)
+		w.onEvent(event)
 	}
 }
 
-func (w *WebsocketManager) WriteMessage(wg *sync.WaitGroup) {
+func (w *WebsocketClient) WriteMessage(wg *sync.WaitGroup) {
 	defer func() {
 		w.Connection.Close()
 		wg.Done()
