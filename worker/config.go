@@ -125,7 +125,11 @@ func initConfig() (err error) {
 	var worker *manager.Worker
 	if captainURL != "" && *workerID != "" && apiKey != "" {
 		log.Printf("Starting worker (URL: %s, WorkerID: %s)", captainURL, *workerID)
-		worker = manager.NewWorker(*workerID, captainURL, apiKey)
+		var err error
+		worker, err = manager.NewWorker(*workerID, captainURL, apiKey)
+		if err != nil {
+			log.Fatalf("Failed to create worker: %v", err)
+		}
 		worker.Start()
 	} else {
 		log.Println("worker not configured (missing captain-url or worker-id or api-key)")

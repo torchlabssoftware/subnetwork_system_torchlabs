@@ -2,6 +2,7 @@ package manager
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,44 +29,113 @@ type Worker struct {
 	UserManager      *UserManager
 	mu               sync.Mutex
 	reconnect        bool
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
-func NewWorker(workerID, baseURL, apiKey string) *Worker {
-	workerUUID, _ := uuid.Parse(workerID)
+func NewWorker(workerID, baseURL, apiKey string) (*Worker, error) {
+	workerUUID, err := uuid.Parse(workerID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid worker ID: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	upstreamManager := NewUpstreamManager()
-	return &Worker{
+	healthCollector := NewHealthCollector(workerUUID, "", "", upstreamManager)
+
+	w := &Worker{
 		ID:              workerUUID,
 		CaptainURL:      baseURL,
 		APIKey:          apiKey,
 		reconnect:       true,
 		UpstreamManager: upstreamManager,
-		HealthCollector: NewHealthCollector(workerUUID, "", "", upstreamManager),
+		HealthCollector: healthCollector,
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 
+	// Initialize UserManager with callback to send events
+	w.UserManager = NewUserManager(func(event Event) {
+		w.mu.Lock()
+		client := w.WebsocketClient
+		w.mu.Unlock()
+		if client != nil {
+			select {
+			case client.egress <- event:
+			case <-w.ctx.Done():
+			}
+		}
+	})
+
+	// Initialize WebsocketManager with all dependencies
+	w.websocketManager = NewWebsocketManager(w.UserManager, upstreamManager, healthCollector, w)
+
+	return w, nil
 }
 
 func (c *Worker) Start() {
-	//start healthcollector and start function for send telemantry health data for every 1hour
+	// Start healthcollector for periodic sampling
 	c.HealthCollector.Start()
+
+	// Start health telemetry sender (every 1 hour)
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
-		for range ticker.C {
-			c.SendHealthTelemetry()
+		for {
+			select {
+			case <-ticker.C:
+				c.SendHealthTelemetry()
+			case <-c.ctx.Done():
+				return
+			}
 		}
 	}()
-	//start worker connect
+
+	// Start connection manager with reconnection logic
 	go func() {
-		for c.reconnect {
+		for {
+			select {
+			case <-c.ctx.Done():
+				return
+			default:
+				if !c.reconnect {
+					return
+				}
+			}
+
 			if err := c.Connect(); err != nil {
 				log.Printf("[Captain] Connection failed: %v. Retrying in 5s...", err)
-				time.Sleep(5 * time.Second)
+				select {
+				case <-time.After(5 * time.Second):
+				case <-c.ctx.Done():
+					return
+				}
 				continue
 			}
+
 			log.Println("[Captain] Disconnected. Reconnecting in 2s...")
-			time.Sleep(2 * time.Second)
+			select {
+			case <-time.After(2 * time.Second):
+			case <-c.ctx.Done():
+				return
+			}
 		}
 	}()
+}
+
+// Stop gracefully shuts down the worker
+func (c *Worker) Stop() {
+	log.Println("[Captain] Shutting down worker...")
+	c.reconnect = false
+	c.cancel()
+	c.HealthCollector.Stop()
+
+	c.mu.Lock()
+	if c.WebsocketClient != nil {
+		c.WebsocketClient.Close()
+	}
+	c.mu.Unlock()
+	log.Println("[Captain] Worker shutdown complete")
 }
 
 func (c *Worker) Connect() error {
@@ -99,26 +169,28 @@ func (c *Worker) Connect() error {
 		return fmt.Errorf("websocket dial failed: %v", err)
 	}
 
-	c.websocketManager = NewWebsocketManager(c.websocketManager.userManager, c.websocketManager.upstreamManager, c.websocketManager.healthCollector, c)
-	c.WebsocketClient = NewWebsocketClient(conn, c.websocketManager.HandleEvent)
+	// Create new WebsocketClient with current connection
+	client := NewWebsocketClient(conn, c.websocketManager.HandleEvent)
 
-	c.UserManager = NewUserManager(func(event Event) {
-		c.WebsocketClient.egress <- event
-	})
+	c.mu.Lock()
+	c.WebsocketClient = client
+	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
-		c.WebsocketClient.Connection.Close()
-		c.WebsocketClient = nil
+		if c.WebsocketClient == client {
+			c.WebsocketClient = nil
+		}
 		c.mu.Unlock()
+		client.Close()
 	}()
 
 	log.Println("[Captain] WebSocket connected successfully")
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go c.WebsocketClient.ReadMessage(&wg)
-	go c.WebsocketClient.WriteMessage(&wg)
+	go client.ReadMessage(&wg)
+	go client.WriteMessage(&wg)
 	wg.Wait()
 
 	return fmt.Errorf("connection closed")
