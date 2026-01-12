@@ -26,6 +26,7 @@ func (m *WebsocketManager) Start() {
 	wg.Add(2)
 	go m.websocketClient.ReadMessage(&wg)
 	go m.websocketClient.WriteMessage(&wg)
+	log.Println("[worker] WebSocket connected successfully")
 	wg.Wait()
 }
 
