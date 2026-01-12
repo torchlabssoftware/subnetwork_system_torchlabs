@@ -50,7 +50,7 @@ func ConnnectToWebsocket(captainURL, APIKey, otp string) (*websocket.Conn, error
 	q := wsURL.Query()
 	q.Set("otp", otp)
 	wsURL.RawQuery = q.Encode()
-	log.Printf("[Captain] Connecting to WebSocket: %s", wsURL.String())
+	log.Printf("[worker] Connecting to WebSocket: %s", wsURL.String())
 	header := http.Header{}
 	header.Set("Authorization", "ApiKey "+APIKey)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL.String(), header)

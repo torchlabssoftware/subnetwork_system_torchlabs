@@ -48,9 +48,9 @@ func (w *WebsocketClient) ReadMessage(wg *sync.WaitGroup) {
 	for {
 		_, payload, err := w.Connection.ReadMessage()
 		if err != nil {
-			log.Println("message read error.Connetion closed:", err)
+			log.Println("[websocket] message read error.Connetion closed:", err)
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Error reading message: %v", err)
+				log.Printf("[websocket] Error reading message: %v", err)
 			}
 			break
 		}
@@ -58,7 +58,7 @@ func (w *WebsocketClient) ReadMessage(wg *sync.WaitGroup) {
 		var event Event
 
 		if err := json.Unmarshal(payload, &event); err != nil {
-			log.Printf("errror marshelling event: %v", err)
+			log.Printf("[websocket] error marshelling event: %v", err)
 			break
 		}
 
@@ -101,7 +101,6 @@ func (w *WebsocketClient) WriteMessage(wg *sync.WaitGroup) {
 				log.Printf("[WebSocket] Failed to send message: %v", err)
 				return
 			}
-			log.Println("[WebSocket] Sent message:", message.Type)
 		}
 	}
 }

@@ -38,7 +38,7 @@ func NewUserManager() *UserManager {
 	userManager := &UserManager{
 		cachedUsers: util.NewConcurrentMap(),
 		//onVerifyUser: onVerifyUser,
-		TTL: 24 * time.Hour,
+		TTL: 1 * time.Hour,
 	}
 	go userManager.cleanupLoop()
 	return userManager
@@ -68,7 +68,7 @@ func (u *UserManager) RemoveUser(username string) {
 }
 
 func (u *UserManager) cleanupLoop() {
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {
 		for item := range u.cachedUsers.IterBuffered() {
@@ -80,24 +80,34 @@ func (u *UserManager) cleanupLoop() {
 	}
 }
 
-func (u *UserManager) VerifyUser(user, pass string) bool {
-	respChan := make(chan bool)
-
-	u.pendingValidations.Store(user, respChan)
-	defer u.pendingValidations.Delete(user)
-
-	_ = UserLoginPayload{
-		Username: user,
-		Password: pass,
+func (u *UserManager) VerifyUser(username, password string, onVerifyUser func(event Event), pool string) bool {
+	if user, ok := u.GetUser(username); ok {
+		if user.Password == password && user.Status == "active" {
+			for _, p := range user.Pools {
+				if p.Tag == pool {
+					if p.DataLimit > p.DataUsage {
+						return true
+					}
+					u.RemoveUser(username)
+					return false
+				}
+			}
+		}
+		return false
 	}
-
-	//u.onVerifyUser(Event{Type: "verify_user", Payload: payload})
-
+	respChan := make(chan bool)
+	u.pendingValidations.Store(username, respChan)
+	defer u.pendingValidations.Delete(username)
+	payload := UserLoginPayload{
+		Username: username,
+		Password: password,
+	}
+	onVerifyUser(Event{Type: "verify_user", Payload: payload})
 	select {
 	case result := <-respChan:
 		return result
 	case <-time.After(5 * time.Second):
-		log.Printf("[Captain] VerifyUser timeout for %s", user)
+		log.Printf("[UserManager] VerifyUser timeout for %s", username)
 		return false
 	}
 }
@@ -108,10 +118,7 @@ func (u *UserManager) processVerifyUserResponse(userPayload UserPayload) {
 		log.Printf("[UserManager] No pending validation for user: %s", userPayload.Username)
 		return
 	}
-
 	respChan := ch.(chan bool)
-
-	// Parse pools with proper validation
 	pools := make([]PoolLimit, 0)
 	for _, pool := range userPayload.Pools {
 		parts := strings.Split(pool, ":")
@@ -135,16 +142,15 @@ func (u *UserManager) processVerifyUserResponse(userPayload UserPayload) {
 			DataUsage: DataUsage,
 		})
 	}
-
 	user := &User{
 		ID:          userPayload.ID,
 		Username:    userPayload.Username,
+		Password:    userPayload.Password,
 		Status:      userPayload.Status,
 		IpWhitelist: userPayload.IpWhitelist,
 		Pools:       pools,
 	}
 	u.SetUser(user)
-
 	// Signal successful auth
 	respChan <- true
 }

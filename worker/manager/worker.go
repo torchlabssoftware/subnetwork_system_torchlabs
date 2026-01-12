@@ -109,12 +109,14 @@ func (c *WorkerManager) processConfig(cfg ConfigPayload) {
 	}
 	c.UpstreamManager.SetUpstreams(upstreams)
 	c.HealthCollector.UpdateWorkerInfo(cfg.WorkerName, c.Worker.Pool.Region)
-	log.Printf("[Captain] Configuration received for Pool: %s", cfg.PoolTag)
-	log.Printf("[Captain] Upstreams count: %d", len(cfg.Upstreams))
+	log.Printf("[worker] Configuration received for Pool: %s", cfg.PoolTag)
+	log.Printf("[worker] Upstreams count: %d", len(cfg.Upstreams))
 }
 
 func (c *WorkerManager) VerifyUser(user, pass string) bool {
-	return c.userManager.VerifyUser(user, pass)
+	return c.userManager.VerifyUser(user, pass, func(event Event) {
+		c.websocketManager.WriteEvent(event)
+	}, c.Worker.Pool.PoolTag)
 }
 
 func (c *WorkerManager) processVerifyUserResponse(userPayload UserPayload) {
