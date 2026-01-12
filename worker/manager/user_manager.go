@@ -20,16 +20,63 @@ type User struct {
 	Pools       []PoolLimit
 }
 
-type UserManager struct {
-	pendingValidations sync.Map
-	users              util.ConcurrentMap
-	onVerifyUser       func(event Event)
+type CachedUser struct {
+	User     *User
+	CachedAt time.Time
+	ExpireAt time.Time
 }
 
-func NewUserManager(onVerifyUser func(event Event)) *UserManager {
-	return &UserManager{
-		users:        util.NewConcurrentMap(),
-		onVerifyUser: onVerifyUser,
+type UserManager struct {
+	cachedUsers        util.ConcurrentMap
+	pendingValidations sync.Map
+	//users              util.ConcurrentMap
+	TTL time.Duration
+	//onVerifyUser func(event Event)
+}
+
+func NewUserManager() *UserManager {
+	userManager := &UserManager{
+		cachedUsers: util.NewConcurrentMap(),
+		//onVerifyUser: onVerifyUser,
+		TTL: 24 * time.Hour,
+	}
+	go userManager.cleanupLoop()
+	return userManager
+}
+
+func (u *UserManager) SetUser(user *User) {
+	u.cachedUsers.Set(user.Username, CachedUser{
+		User:     user,
+		CachedAt: time.Now(),
+		ExpireAt: time.Now().Add(u.TTL),
+	})
+}
+
+func (u *UserManager) GetUser(username string) (*User, bool) {
+	if user, ok := u.cachedUsers.Get(username); ok {
+		cachedUser := user.(CachedUser)
+		if time.Now().Before(cachedUser.ExpireAt) {
+			return cachedUser.User, true
+		}
+		u.RemoveUser(username)
+	}
+	return nil, false
+}
+
+func (u *UserManager) RemoveUser(username string) {
+	u.cachedUsers.Remove(username)
+}
+
+func (u *UserManager) cleanupLoop() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		for item := range u.cachedUsers.IterBuffered() {
+			cachedUser := item.Val.(CachedUser)
+			if time.Now().After(cachedUser.ExpireAt) {
+				u.RemoveUser(item.Key)
+			}
+		}
 	}
 }
 
@@ -39,12 +86,12 @@ func (u *UserManager) VerifyUser(user, pass string) bool {
 	u.pendingValidations.Store(user, respChan)
 	defer u.pendingValidations.Delete(user)
 
-	payload := UserLoginPayload{
+	_ = UserLoginPayload{
 		Username: user,
 		Password: pass,
 	}
 
-	u.onVerifyUser(Event{Type: "verify_user", Payload: payload})
+	//u.onVerifyUser(Event{Type: "verify_user", Payload: payload})
 
 	select {
 	case result := <-respChan:
@@ -96,7 +143,7 @@ func (u *UserManager) processVerifyUserResponse(userPayload UserPayload) {
 		IpWhitelist: userPayload.IpWhitelist,
 		Pools:       pools,
 	}
-	u.users.Set(user.Username, user)
+	u.SetUser(user)
 
 	// Signal successful auth
 	respChan <- true

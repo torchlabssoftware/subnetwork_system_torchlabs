@@ -3,27 +3,43 @@ package manager
 import (
 	"encoding/json"
 	"log"
+	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 type WebsocketManager struct {
-	worker          *Worker
-	userManager     *UserManager
-	upstreamManager *UpstreamManager
-	healthCollector *HealthCollector
+	worker          *WorkerManager
+	websocketClient *WebsocketClient
 }
 
-func NewWebsocketManager(userManager *UserManager, upstreamManager *UpstreamManager, healthCollector *HealthCollector, worker *Worker) *WebsocketManager {
-	return &WebsocketManager{
-		userManager:     userManager,
-		upstreamManager: upstreamManager,
-		healthCollector: healthCollector,
-		worker:          worker,
+func NewWebsocketManager(worker *WorkerManager, conn *websocket.Conn) *WebsocketManager {
+	websocketManager := &WebsocketManager{
+		worker: worker,
 	}
+	websocketManager.websocketClient = NewWebsocketClient(conn, websocketManager.HandleEvent)
+	return websocketManager
+}
+
+func (m *WebsocketManager) Start() {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go m.websocketClient.ReadMessage(&wg)
+	go m.websocketClient.WriteMessage(&wg)
+	wg.Wait()
+}
+
+func (m *WebsocketManager) Stop() {
+	m.websocketClient.Close()
+}
+
+func (w *WebsocketManager) WriteEvent(event Event) {
+	log.Println("[captain] sending event: ", event.Type)
+	w.websocketClient.egress <- event
 }
 
 func (m *WebsocketManager) HandleEvent(event Event) {
 	log.Printf("[Captain] Received event: %s", event.Type)
-
 	switch event.Type {
 	case "config":
 		m.processConfig(event.Payload)
@@ -90,5 +106,5 @@ func (m *WebsocketManager) processVerifyUserResponse(payload interface{}) {
 		log.Printf("[Captain] Failed to parse UserPayload: %v", err)
 		return
 	}
-	m.userManager.processVerifyUserResponse(userPayload)
+	m.worker.processVerifyUserResponse(userPayload)
 }

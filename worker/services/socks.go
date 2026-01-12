@@ -47,7 +47,7 @@ type SOCKS struct {
 	outPool utils.OutPool
 	cfg     SOCKSArgs
 	checker utils.Checker
-	worker  *manager.Worker
+	worker  *manager.WorkerManager
 }
 
 func NewSOCKS() Service {
@@ -70,7 +70,7 @@ func (s *SOCKS) StopService() {
 	}
 }
 
-func (s *SOCKS) Start(args interface{}, worker *manager.Worker) (err error) {
+func (s *SOCKS) Start(args interface{}, worker *manager.WorkerManager) (err error) {
 	s.cfg = args.(SOCKSArgs)
 	s.worker = worker
 
@@ -219,12 +219,12 @@ func (s *SOCKS) handlePasswordAuth(inConn *net.Conn) error {
 	}
 
 	// Validate credentials
-	if !s.worker.UserManager.VerifyUser(string(username), string(password)) {
+	if !s.worker.VerifyUser(string(username), string(password)) {
 		(*inConn).Write([]byte{0x01, 0x01}) // Auth failed
 		return fmt.Errorf("authentication failed for user: %s", string(username))
 	}
 
-	s.worker.UserManager.VerifyUser(string(username), string(password))
+	s.worker.VerifyUser(string(username), string(password))
 
 	log.Printf("socks5 auth success for user: %s", string(username))
 	(*inConn).Write([]byte{0x01, 0x00}) // Auth success

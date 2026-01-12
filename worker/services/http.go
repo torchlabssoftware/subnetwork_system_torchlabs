@@ -24,7 +24,7 @@ type HTTP struct {
 	outPool utils.OutPool
 	cfg     HTTPArgs
 	checker utils.Checker
-	worker  *manager.Worker
+	worker  *manager.WorkerManager
 }
 
 func NewHTTP() Service {
@@ -47,7 +47,7 @@ func (s *HTTP) StopService() {
 	}
 }
 
-func (s *HTTP) Start(args interface{}, worker *manager.Worker) (err error) {
+func (s *HTTP) Start(args interface{}, worker *manager.WorkerManager) (err error) {
 	s.cfg = args.(HTTPArgs)
 	s.worker = worker
 
@@ -84,7 +84,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 			log.Printf("http(s) conn handler crashed with err : %s \nstack: %s", err, string(debug.Stack()))
 		}
 	}()
-	req, err := utils.NewHTTPRequest(&inConn, 4096, s.worker.UserManager.VerifyUser)
+	req, err := utils.NewHTTPRequest(&inConn, 4096, s.worker.VerifyUser)
 	if err != nil {
 		if err != io.EOF {
 			log.Printf("decoder error , form %s, ERR:%s", inConn.RemoteAddr(), err)
@@ -245,7 +245,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		// Send data usage to Captain when connection closes
 		if s.worker != nil && (bytesSent > 0 || bytesReceived > 0) {
 			poolID, poolName := s.worker.GetPoolInfo()
-			workerUUID, _ := uuid.Parse(s.worker.ID.String())
+			workerUUID, _ := uuid.Parse(s.worker.Worker.ID.String())
 			poolUUID, _ := uuid.Parse(poolID)
 
 			usage := manager.UserDataUsage{
@@ -254,7 +254,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 				PoolID:          poolUUID,
 				PoolName:        poolName,
 				WorkerID:        workerUUID,
-				WorkerRegion:    s.worker.Pool.Region,
+				WorkerRegion:    s.worker.Worker.Pool.Region,
 				BytesSent:       atomic.LoadUint64(&bytesSent),
 				BytesReceived:   atomic.LoadUint64(&bytesReceived),
 				SourceIP:        sourceIP,
