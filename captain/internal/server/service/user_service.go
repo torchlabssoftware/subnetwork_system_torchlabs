@@ -369,7 +369,15 @@ func (u *userService) GenerateProxyString(ctx context.Context, req *models.Gener
 	res := []string{}
 
 	for i := 0; i < *req.Amount; i++ {
-		config := functions.GenerateproxyString(*req.PoolGroup, *req.CountryCode, *req.IsSticky)
+		if req.City == nil {
+			val := ""
+			req.City = &val
+		}
+		if req.State == nil {
+			val := ""
+			req.State = &val
+		}
+		config := functions.GenerateproxyString(*req.PoolGroup, *req.CountryCode, *req.IsSticky, *req.City, *req.State, req.SessionDuration)
 		switch *req.Format {
 		case "ip:port:user:pass":
 			proxyString := fmt.Sprintf("%s"+"upstream-y.com"+":%d:%s:%s%s", subdomain, port, userName, password, config)
@@ -378,7 +386,7 @@ func (u *userService) GenerateProxyString(ctx context.Context, req *models.Gener
 			proxyString := fmt.Sprintf("%s:%s%s:%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
 			res = append(res, proxyString)
 		case "user:pass@ip:port":
-			proxyString := fmt.Sprintf("%s:%s%s@%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
+			proxyString := fmt.Sprintf("%s:%s%s@%s"+".upstream-y.com"+":%d", userName, password, config, subdomain, port)
 			res = append(res, proxyString)
 		}
 	}

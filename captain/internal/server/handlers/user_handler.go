@@ -341,11 +341,15 @@ func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("sticky is required"))
 		return
 	}
-	if req.CountryCode == nil {
+	if *req.IsSticky && (req.SessionDuration != nil && *req.SessionDuration <= 0) {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("sticky is required"))
+		return
+	}
+	if req.CountryCode == nil || *req.CountryCode == "" {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("country code is required"))
 		return
 	}
-	if req.PoolGroup == nil {
+	if req.PoolGroup == nil || *req.PoolGroup == "" {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("pool group is required"))
 		return
 	}
@@ -353,8 +357,12 @@ func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("proxy type is required"))
 		return
 	}
-	if req.Format == nil {
+	if req.Format == nil || *req.Format == "" {
 		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("format is required"))
+		return
+	}
+	if (req.State != nil && *req.State != "") && (req.City != nil && *req.City != "") {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", fmt.Errorf("both state and city cannot be set"))
 		return
 	}
 
