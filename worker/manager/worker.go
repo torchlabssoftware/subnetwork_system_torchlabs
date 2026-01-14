@@ -123,13 +123,6 @@ func (c *WorkerManager) processVerifyUserResponse(userPayload UserPayload) {
 	c.userManager.processVerifyUserResponse(userPayload)
 }
 
-func (c *WorkerManager) GetUser(user string) string {
-	if user, ok := c.userManager.GetUser(user); ok {
-		return user.Username
-	}
-	return ""
-}
-
 func (c *WorkerManager) HasUpstreams() bool {
 	return c.upstreamManager != nil && c.upstreamManager.HasUpstreams()
 }

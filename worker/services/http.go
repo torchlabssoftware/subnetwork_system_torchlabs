@@ -84,7 +84,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 			log.Printf("http(s) conn handler crashed with err : %s \nstack: %s", err, string(debug.Stack()))
 		}
 	}()
-	req, err := utils.NewHTTPRequest(&inConn, 4096, s.worker.VerifyUser, s.worker.GetUser)
+	req, err := utils.NewHTTPRequest(&inConn, 4096, s.worker.VerifyUser)
 	if err != nil {
 		if err != io.EOF {
 			log.Printf("decoder error , form %s, ERR:%s", inConn.RemoteAddr(), err)
@@ -132,21 +132,16 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	}
 
 	var outConn net.Conn
-	var upstreamUser, upstreamPass string
+	var upstream *manager.Upstream
 
 	if useProxy {
 		if s.worker.HasUpstreams() {
-			upstream := s.worker.NextUpstream(req.User, req.Session)
+			upstream = s.worker.NextUpstream(req.User, req.Tag.Session)
 			if upstream != nil {
-				upstreamAddr := upstream.GetAddress()
-				upstreamUser = upstream.UpstreamUsername
-				upstreamPass = upstream.UpstreamPassword
-				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstreamAddr, upstream.UpstreamTag)
-
+				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstream.GetAddress(), upstream.UpstreamTag)
 				connectStart := time.Now()
-				outConn, err = utils.ConnectHost(upstreamAddr, *s.cfg.Timeout)
+				outConn, err = utils.ConnectHost(upstream.GetAddress(), *s.cfg.Timeout)
 				connectLatency := time.Since(connectStart)
-
 				s.worker.RecordUpstreamLatency(upstream, connectLatency, nil)
 			} else {
 				outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
@@ -170,24 +165,14 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 
 	if req.IsHTTPS() && !useProxy {
 		req.HTTPSReply()
-	} else {
-		httpReq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(req.HeadBuf)))
+	}
+	if useProxy {
+		err := connectUpstream(req, upstream, &outConn)
 		if err != nil {
-			utils.CloseConn(&outConn)
 			return err
 		}
-		httpReq.Header.Del("Proxy-Authorization")
-
-		// Use upstream credentials if available
-		if upstreamUser != "" && upstreamPass != "" {
-			token := base64.StdEncoding.EncodeToString([]byte(upstreamUser + ":" + upstreamPass))
-			httpReq.Header.Set("Proxy-Authorization", "Basic "+token)
-			log.Printf("[Upstream] Using credentials for user: %s", upstreamUser)
-		}
-
-		var buf bytes.Buffer
-		httpReq.WriteProxy(&buf)
-		outConn.Write(buf.Bytes())
+	} else {
+		outConn.Write(req.HeadBuf)
 	}
 
 	// Data usage tracking
@@ -327,4 +312,83 @@ func (s *HTTP) IsDeadLoop(inLocalAddr string, host string) bool {
 		}
 	}
 	return false
+}
+
+func connectUpstream(req *utils.HTTPRequest, upstream *manager.Upstream, outConn *net.Conn) error {
+	httpReq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(req.HeadBuf)))
+	if err != nil {
+		utils.CloseConn(outConn)
+		return err
+	}
+	httpReq.Header.Del("Proxy-Authorization")
+	if upstream.UpstreamUsername != "" && upstream.UpstreamPassword != "" {
+		tag := convertTag(upstream.UpstreamUsername, upstream.UpstreamPassword, req.Tag, upstream.UpstreamProvider)
+		log.Printf("[Upstream] Using tag: %s", tag)
+		token := base64.StdEncoding.EncodeToString([]byte(tag))
+		httpReq.Header.Set("Proxy-Authorization", "Basic "+token)
+		log.Printf("[Upstream] Using credentials for user: %s", upstream.UpstreamUsername)
+	}
+	var buf bytes.Buffer
+	httpReq.WriteProxy(&buf)
+	(*outConn).Write(buf.Bytes())
+	return nil
+}
+
+func convertTag(username, password string, tag utils.Tag, upstream string) string {
+	newstring := ""
+	switch upstream {
+	case "netnut":
+		newstring += username
+		if tag.Country != "" && (tag.City != "" || tag.State != "") {
+			newstring += "-res_sc-" + tag.Country
+			if tag.State != "" {
+				newstring += "_" + tag.State
+			}
+			if tag.City != "" {
+				newstring += "_" + tag.City
+			}
+		} else {
+			newstring += "-res-" + tag.Country
+		}
+		if tag.Session != "" {
+			newstring += "-sid-" + tag.Session
+		}
+		newstring += ":" + password
+	case "geonode":
+		newstring += username
+		if tag.Country != "" {
+			newstring += "-country-" + tag.Country
+		}
+		/*if tag.State != "" {
+			newstring += "_" + tag.State
+		}*/
+		if tag.City != "" {
+			newstring += "-city-" + tag.City
+		}
+		if tag.Session != "" {
+			newstring += "-session-" + tag.Session
+		}
+		if tag.Lifetime > 0 {
+			newstring += "-lifetime-" + strconv.Itoa(tag.Lifetime)
+		}
+		newstring += ":" + password
+	case "iproyal":
+		newstring += username + ":" + password
+		if tag.Country != "" {
+			newstring += "_country-" + tag.Country
+		}
+		/*if tag.State != "" {
+			newstring += "_" + tag.State
+		}*/
+		if tag.City != "" {
+			newstring += "_city-" + tag.City
+		}
+		if tag.Session != "" {
+			newstring += "_session-" + tag.Session
+		}
+		if tag.Lifetime > 0 {
+			newstring += "_lifetime-" + strconv.Itoa(tag.Lifetime) + "m"
+		}
+	}
+	return newstring
 }

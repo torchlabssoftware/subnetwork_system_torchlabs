@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -252,19 +253,24 @@ type HTTPRequest struct {
 	URL       string
 	hostOrURL string
 	Validator func(string, string) bool
-	getUser   func(string) string
 	User      string
-	Session   string
-	Tag       string
+	Tag       Tag
 }
 
-func NewHTTPRequest(inConn *net.Conn, bufSize int, validator func(string, string) bool, getUser func(string) string) (req HTTPRequest, err error) {
+type Tag struct {
+	Country  string
+	State    string
+	City     string
+	Session  string
+	Lifetime int
+}
+
+func NewHTTPRequest(inConn *net.Conn, bufSize int, validator func(string, string) bool) (req HTTPRequest, err error) {
 	buf := make([]byte, bufSize)
 	len := 0
 	req = HTTPRequest{
 		conn:      inConn,
 		Validator: validator,
-		getUser:   getUser,
 	}
 	len, err = (*inConn).Read(buf[:])
 	if err != nil {
@@ -357,36 +363,37 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 		return
 	}
 
-	//use manager for authenticate user
 	authOk := false
 	u := strings.Split(strings.Trim(string(user), " "), ":")
 	tagArray := strings.Split(u[1], "-")
-	password := tagArray[0]
-	sessionIndex := -1
+	req.Tag = Tag{}
 	for i, v := range tagArray {
+		if v == "country" {
+			req.Tag.Country = tagArray[i+1]
+		}
+		if v == "state" {
+			req.Tag.State = tagArray[i+1]
+		}
+		if v == "city" {
+			req.Tag.City = tagArray[i+1]
+		}
 		if v == "session" {
-			sessionIndex = i
-			break
+			req.Tag.Session = tagArray[i+1]
+		}
+		if v == "lifetime" {
+			req.Tag.Lifetime, _ = strconv.Atoi(tagArray[i+1])
 		}
 	}
-	if sessionIndex == -1 {
-		req.Session = ""
-	}
-	session := tagArray[sessionIndex+1]
-	req.Session = session
-	tagArray = tagArray[1:]
-	req.Tag = "-" + strings.Join(tagArray, "-")
 	if req.Validator != nil {
-		authOk = req.Validator(u[0], password)
+		authOk = req.Validator(u[0], tagArray[0])
 	}
-
 	if !authOk {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")
 		CloseConn(req.conn)
 		err = fmt.Errorf("basic auth fail")
 		return
 	}
-	req.User = req.getUser(u[0])
+	req.User = u[0]
 	return
 }
 
