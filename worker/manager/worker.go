@@ -20,7 +20,7 @@ type worker struct {
 type WorkerManager struct {
 	Worker           worker
 	websocketManager *WebsocketManager
-	UpstreamManager  *UpstreamManager
+	upstreamManager  *UpstreamManager
 	HealthCollector  *HealthCollector
 	userManager      *UserManager
 }
@@ -39,7 +39,7 @@ func NewWorkerManager(workerID, baseURL, apiKey string) (*WorkerManager, error) 
 			CaptainURL: baseURL,
 			APIKey:     apiKey,
 		},
-		UpstreamManager: upstreamManager,
+		upstreamManager: upstreamManager,
 		HealthCollector: healthCollector,
 		userManager:     userManager,
 	}
@@ -107,7 +107,7 @@ func (c *WorkerManager) processConfig(cfg ConfigPayload) {
 			Weight:           upstream.Weight,
 		})
 	}
-	c.UpstreamManager.SetUpstreams(upstreams)
+	c.upstreamManager.SetUpstreams(upstreams)
 	c.HealthCollector.UpdateWorkerInfo(cfg.WorkerName, c.Worker.Pool.Region)
 	log.Printf("[worker] Configuration received for Pool: %s", cfg.PoolTag)
 	log.Printf("[worker] Upstreams count: %d", len(cfg.Upstreams))
@@ -121,6 +121,43 @@ func (c *WorkerManager) VerifyUser(user, pass string) bool {
 
 func (c *WorkerManager) processVerifyUserResponse(userPayload UserPayload) {
 	c.userManager.processVerifyUserResponse(userPayload)
+}
+
+func (c *WorkerManager) GetUser(user string) string {
+	if user, ok := c.userManager.GetUser(user); ok {
+		return user.Username
+	}
+	return ""
+}
+
+func (c *WorkerManager) HasUpstreams() bool {
+	return c.upstreamManager != nil && c.upstreamManager.HasUpstreams()
+}
+
+func (c *WorkerManager) NextUpstream(username, session string) *Upstream {
+	if session == "" {
+		return c.upstreamManager.Next()
+	}
+	if user, ok := c.userManager.GetUser(username); ok {
+		sessions := user.Sessions
+		if upstream, ok := sessions[session]; ok {
+			log.Println("[worker] Using existing upstream for session:", session)
+			return &upstream
+		}
+		upstream := c.upstreamManager.Next()
+		sessions[session] = *upstream
+		return upstream
+	}
+	return c.upstreamManager.Next()
+}
+
+func (c *WorkerManager) RecordUpstreamLatency(upstream *Upstream, connectLatency time.Duration, err error) {
+	c.HealthCollector.RecordUpstreamLatency(
+		upstream.UpstreamID,
+		upstream.UpstreamTag,
+		connectLatency,
+		err != nil,
+	)
 }
 
 // SendDataUsage sends a user data usage event to Captain via WebSocket

@@ -36,7 +36,7 @@ func NewHTTP() Service {
 }
 
 func (s *HTTP) InitService() {
-	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+	if s.worker.HasUpstreams() {
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
@@ -84,7 +84,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 			log.Printf("http(s) conn handler crashed with err : %s \nstack: %s", err, string(debug.Stack()))
 		}
 	}()
-	req, err := utils.NewHTTPRequest(&inConn, 4096, s.worker.VerifyUser)
+	req, err := utils.NewHTTPRequest(&inConn, 4096, s.worker.VerifyUser, s.worker.GetUser)
 	if err != nil {
 		if err != io.EOF {
 			log.Printf("decoder error , form %s, ERR:%s", inConn.RemoteAddr(), err)
@@ -96,23 +96,23 @@ func (s *HTTP) callback(inConn net.Conn) {
 
 	// Determine if we should use upstream proxy
 	useProxy := false
-	if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
-		useProxy = true
-	} else if *s.cfg.Always {
-		useProxy = true
-	} else {
-		if req.IsHTTPS() {
-			s.checker.Add(address, true, req.Method, "", nil)
+	if s.worker.HasUpstreams() {
+		if *s.cfg.Always {
+			useProxy = true
 		} else {
-			s.checker.Add(address, false, req.Method, req.URL, req.HeadBuf)
+			if req.IsHTTPS() {
+				s.checker.Add(address, true, req.Method, "", nil)
+			} else {
+				s.checker.Add(address, false, req.Method, req.URL, req.HeadBuf)
+			}
+			useProxy, _, _ = s.checker.IsBlocked(req.Host)
 		}
-		useProxy, _, _ = s.checker.IsBlocked(req.Host)
 	}
 
 	log.Printf("use proxy : %v, %s", useProxy, address)
 	err = s.OutToTCP(useProxy, address, &inConn, &req)
 	if err != nil {
-		if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
+		if s.worker.HasUpstreams() {
 			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
 		} else {
 			log.Printf("connect to %s fail, ERR:%s", address, err)
@@ -133,34 +133,23 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 
 	var outConn net.Conn
 	var upstreamUser, upstreamPass string
-	var currentUpstream *manager.Upstream
 
 	if useProxy {
-		// Try to get upstream from manager (round-robin)
-		if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
-			upstream := s.worker.UpstreamManager.Next()
+		if s.worker.HasUpstreams() {
+			upstream := s.worker.NextUpstream(req.User, req.Session)
 			if upstream != nil {
-				currentUpstream = upstream
 				upstreamAddr := upstream.GetAddress()
 				upstreamUser = upstream.UpstreamUsername
 				upstreamPass = upstream.UpstreamPassword
 				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstreamAddr, upstream.UpstreamTag)
 
-				// Measure connection latency for upstream health tracking
 				connectStart := time.Now()
 				outConn, err = utils.ConnectHost(upstreamAddr, *s.cfg.Timeout)
 				connectLatency := time.Since(connectStart)
 
-				// Record upstream latency in health collector
-				if s.worker != nil && s.worker.HealthCollector != nil {
-					s.worker.HealthCollector.RecordUpstreamLatency(
-						upstream.UpstreamID,
-						upstream.UpstreamTag,
-						connectLatency,
-						err != nil,
-					)
-				}
+				s.worker.RecordUpstreamLatency(upstream, connectLatency, nil)
 			} else {
+				outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 				err = fmt.Errorf("no upstream available")
 			}
 		} else {
@@ -169,9 +158,6 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	} else {
 		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 	}
-
-	// Store current upstream for error tracking on connection close
-	_ = currentUpstream // Will be used for per-request upstream error tracking if needed
 
 	if err != nil {
 		log.Printf("connect to %s , err:%s", "", err)

@@ -71,6 +71,7 @@ func (c *Checker) loadMap(f string) (dataMap ConcurrentMap) {
 	}
 	return
 }
+
 func (c *Checker) start() {
 	go func() {
 		for {
@@ -102,6 +103,7 @@ func (c *Checker) start() {
 		}
 	}()
 }
+
 func (c *Checker) isNeedCheck(item CheckerItem) bool {
 	var minCount uint = 5
 	if (item.SuccessCount >= minCount && item.SuccessCount > item.FailCount) ||
@@ -112,6 +114,7 @@ func (c *Checker) isNeedCheck(item CheckerItem) bool {
 	}
 	return true
 }
+
 func (c *Checker) IsBlocked(address string) (blocked bool, failN, successN uint) {
 	if c.domainIsInMap(address, true) {
 		//log.Printf("%s in blocked ? true", address)
@@ -131,6 +134,7 @@ func (c *Checker) IsBlocked(address string) (blocked bool, failN, successN uint)
 
 	return item.FailCount >= item.SuccessCount, item.FailCount, item.SuccessCount
 }
+
 func (c *Checker) domainIsInMap(address string, blockedMap bool) bool {
 	u, err := url.Parse("http://" + address)
 	if err != nil {
@@ -154,6 +158,7 @@ func (c *Checker) domainIsInMap(address string, blockedMap bool) bool {
 	}
 	return false
 }
+
 func (c *Checker) Add(address string, isHTTPS bool, method, URL string, data []byte) {
 	if c.domainIsInMap(address, false) || c.domainIsInMap(address, true) {
 		return
@@ -247,14 +252,19 @@ type HTTPRequest struct {
 	URL       string
 	hostOrURL string
 	Validator func(string, string) bool
+	getUser   func(string) string
+	User      string
+	Session   string
+	Tag       string
 }
 
-func NewHTTPRequest(inConn *net.Conn, bufSize int, validator func(string, string) bool) (req HTTPRequest, err error) {
+func NewHTTPRequest(inConn *net.Conn, bufSize int, validator func(string, string) bool, getUser func(string) string) (req HTTPRequest, err error) {
 	buf := make([]byte, bufSize)
 	len := 0
 	req = HTTPRequest{
 		conn:      inConn,
 		Validator: validator,
+		getUser:   getUser,
 	}
 	len, err = (*inConn).Read(buf[:])
 	if err != nil {
@@ -350,8 +360,24 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 	//use manager for authenticate user
 	authOk := false
 	u := strings.Split(strings.Trim(string(user), " "), ":")
+	tagArray := strings.Split(u[1], "-")
+	password := tagArray[0]
+	sessionIndex := -1
+	for i, v := range tagArray {
+		if v == "session" {
+			sessionIndex = i
+			break
+		}
+	}
+	if sessionIndex == -1 {
+		req.Session = ""
+	}
+	session := tagArray[sessionIndex+1]
+	req.Session = session
+	tagArray = tagArray[1:]
+	req.Tag = "-" + strings.Join(tagArray, "-")
 	if req.Validator != nil {
-		authOk = req.Validator(u[0], u[1])
+		authOk = req.Validator(u[0], password)
 	}
 
 	if !authOk {
@@ -360,6 +386,7 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 		err = fmt.Errorf("basic auth fail")
 		return
 	}
+	req.User = req.getUser(u[0])
 	return
 }
 

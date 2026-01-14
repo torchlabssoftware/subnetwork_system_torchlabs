@@ -18,6 +18,7 @@ type User struct {
 	Status      string
 	IpWhitelist []string
 	Pools       []PoolLimit
+	Sessions    map[string]Upstream
 }
 
 type CachedUser struct {
@@ -29,16 +30,13 @@ type CachedUser struct {
 type UserManager struct {
 	cachedUsers        util.ConcurrentMap
 	pendingValidations sync.Map
-	//users              util.ConcurrentMap
-	TTL time.Duration
-	//onVerifyUser func(event Event)
+	TTL                time.Duration
 }
 
 func NewUserManager() *UserManager {
 	userManager := &UserManager{
 		cachedUsers: util.NewConcurrentMap(),
-		//onVerifyUser: onVerifyUser,
-		TTL: 1 * time.Hour,
+		TTL:         1 * time.Hour,
 	}
 	go userManager.cleanupLoop()
 	return userManager
@@ -86,13 +84,17 @@ func (u *UserManager) VerifyUser(username, password string, onVerifyUser func(ev
 			for _, p := range user.Pools {
 				if p.Tag == pool {
 					if p.DataLimit > p.DataUsage {
+						log.Printf("[UserManager] user login success [username:%v]/n", username)
 						return true
 					}
+					log.Printf("[UserManager] user login failed [username:%v]/n", username)
 					u.RemoveUser(username)
 					return false
 				}
 			}
 		}
+		log.Printf("[UserManager] user login failed [username:%v]\n", username)
+		u.RemoveUser(username)
 		return false
 	}
 	respChan := make(chan bool)
@@ -149,8 +151,8 @@ func (u *UserManager) processVerifyUserResponse(userPayload UserPayload) {
 		Status:      userPayload.Status,
 		IpWhitelist: userPayload.IpWhitelist,
 		Pools:       pools,
+		Sessions:    make(map[string]Upstream),
 	}
 	u.SetUser(user)
-	// Signal successful auth
 	respChan <- true
 }

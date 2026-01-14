@@ -59,7 +59,7 @@ func NewSOCKS() Service {
 }
 
 func (s *SOCKS) InitService() {
-	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+	if s.worker.HasUpstreams() {
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
@@ -123,7 +123,7 @@ func (s *SOCKS) callback(inConn net.Conn) {
 	}
 
 	useProxy := true
-	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+	if s.worker.HasUpstreams() {
 		useProxy = false
 	} else if *s.cfg.Always {
 		useProxy = true
@@ -135,7 +135,7 @@ func (s *SOCKS) callback(inConn net.Conn) {
 
 	err = s.OutToTCP(useProxy, address, &inConn)
 	if err != nil {
-		if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+		if s.worker.HasUpstreams() {
 			log.Printf("connect to %s fail, ERR:%s", address, err)
 		} else {
 			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
