@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -71,6 +72,7 @@ func (c *Checker) loadMap(f string) (dataMap ConcurrentMap) {
 	}
 	return
 }
+
 func (c *Checker) start() {
 	go func() {
 		for {
@@ -102,6 +104,7 @@ func (c *Checker) start() {
 		}
 	}()
 }
+
 func (c *Checker) isNeedCheck(item CheckerItem) bool {
 	var minCount uint = 5
 	if (item.SuccessCount >= minCount && item.SuccessCount > item.FailCount) ||
@@ -112,6 +115,7 @@ func (c *Checker) isNeedCheck(item CheckerItem) bool {
 	}
 	return true
 }
+
 func (c *Checker) IsBlocked(address string) (blocked bool, failN, successN uint) {
 	if c.domainIsInMap(address, true) {
 		//log.Printf("%s in blocked ? true", address)
@@ -131,6 +135,7 @@ func (c *Checker) IsBlocked(address string) (blocked bool, failN, successN uint)
 
 	return item.FailCount >= item.SuccessCount, item.FailCount, item.SuccessCount
 }
+
 func (c *Checker) domainIsInMap(address string, blockedMap bool) bool {
 	u, err := url.Parse("http://" + address)
 	if err != nil {
@@ -154,6 +159,7 @@ func (c *Checker) domainIsInMap(address string, blockedMap bool) bool {
 	}
 	return false
 }
+
 func (c *Checker) Add(address string, isHTTPS bool, method, URL string, data []byte) {
 	if c.domainIsInMap(address, false) || c.domainIsInMap(address, true) {
 		return
@@ -174,7 +180,7 @@ func (c *Checker) Add(address string, isHTTPS bool, method, URL string, data []b
 	c.data.SetIfAbsent(item.Host, item)
 }
 
-type BasicAuth struct {
+/*type BasicAuth struct {
 	data      ConcurrentMap
 	Validator func(string, string) bool
 }
@@ -237,7 +243,7 @@ func (ba *BasicAuth) Check(userpass string) (ok bool) {
 func (ba *BasicAuth) Total() (n int) {
 	n = ba.data.Count()
 	return
-}
+}*/
 
 type HTTPRequest struct {
 	HeadBuf   []byte
@@ -246,14 +252,25 @@ type HTTPRequest struct {
 	Method    string
 	URL       string
 	hostOrURL string
-	basicAuth *BasicAuth
+	Validator func(string, string) bool
+	User      string
+	Tag       Tag
 }
 
-func NewHTTPRequest(inConn *net.Conn, bufSize int, basicAuth *BasicAuth) (req HTTPRequest, err error) {
+type Tag struct {
+	Country  string
+	State    string
+	City     string
+	Session  string
+	Lifetime int
+}
+
+func NewHTTPRequest(inConn *net.Conn, bufSize int, validator func(string, string) bool) (req HTTPRequest, err error) {
 	buf := make([]byte, bufSize)
 	len := 0
 	req = HTTPRequest{
-		conn: inConn,
+		conn:      inConn,
+		Validator: validator,
 	}
 	len, err = (*inConn).Read(buf[:])
 	if err != nil {
@@ -277,7 +294,6 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, basicAuth *BasicAuth) (req HT
 		return
 	}
 	req.Method = strings.ToUpper(req.Method)
-	req.basicAuth = basicAuth
 	log.Printf("%s:%s", req.Method, req.hostOrURL)
 
 	if req.IsHTTPS() {
@@ -347,14 +363,37 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 		return
 	}
 
-	authOk := (*req.basicAuth).Check(string(user))
-
+	authOk := false
+	u := strings.Split(strings.Trim(string(user), " "), ":")
+	tagArray := strings.Split(u[1], "-")
+	req.Tag = Tag{}
+	for i, v := range tagArray {
+		if v == "country" {
+			req.Tag.Country = tagArray[i+1]
+		}
+		if v == "state" {
+			req.Tag.State = tagArray[i+1]
+		}
+		if v == "city" {
+			req.Tag.City = tagArray[i+1]
+		}
+		if v == "session" {
+			req.Tag.Session = tagArray[i+1]
+		}
+		if v == "lifetime" {
+			req.Tag.Lifetime, _ = strconv.Atoi(tagArray[i+1])
+		}
+	}
+	if req.Validator != nil {
+		authOk = req.Validator(u[0], tagArray[0])
+	}
 	if !authOk {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")
 		CloseConn(req.conn)
 		err = fmt.Errorf("basic auth fail")
 		return
 	}
+	req.User = u[0]
 	return
 }
 

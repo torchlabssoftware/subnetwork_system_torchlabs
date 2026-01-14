@@ -9,7 +9,7 @@ import (
 )
 
 type Service interface {
-	Start(args interface{}, worker *manager.Worker) (err error)
+	Start(args interface{}, worker *manager.WorkerManager) (err error)
 	Clean()
 }
 
@@ -31,7 +31,7 @@ func Regist(name string, s Service, args interface{}) {
 }
 
 // run the service in the arguments. do not try to run several services at the same time
-func Run(name string, worker *manager.Worker) (service *ServiceItem, err error) {
+func Run(name string, worker *manager.WorkerManager) (service *ServiceItem, err error) {
 	service, ok := servicesMap[name]
 	if ok {
 		go func() {

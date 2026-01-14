@@ -238,10 +238,10 @@ func (h *HealthCollector) BuildWorkerHealth() WorkerHealth {
 		}
 
 		upstreamStatus := "healthy"
-		if upstreamErrorRate > 50 {
-			upstreamStatus = "degraded"
-		} else if upstreamErrorRate > 80 {
+		if upstreamErrorRate > 80 {
 			upstreamStatus = "unhealthy"
+		} else if upstreamErrorRate > 50 {
+			upstreamStatus = "degraded"
 		}
 
 		upstreams = append(upstreams, UpstreamHealth{
