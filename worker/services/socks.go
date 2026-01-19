@@ -65,8 +65,10 @@ func (s *SOCKS) InitService() {
 }
 
 func (s *SOCKS) StopService() {
-	if s.outPool.Pool != nil {
-		s.outPool.Pool.ReleaseAll()
+	if s.outPool.UpstreamPool != nil {
+		for _, pool := range s.outPool.UpstreamPool {
+			(*pool).ReleaseAll()
+		}
 	}
 }
 
@@ -369,10 +371,10 @@ func (s *SOCKS) InitOutConnPool() {
 			*s.cfg.CheckParentInterval,
 			*s.cfg.ParentType == TYPE_TLS,
 			s.cfg.CertBytes, s.cfg.KeyBytes,
-			"",
 			*s.cfg.Timeout,
 			*s.cfg.PoolSize,
 			*s.cfg.PoolSize*2,
+			s.worker.GetUpstreamAddress(),
 		)
 	}
 }

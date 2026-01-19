@@ -15,7 +15,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/utils"
 )
@@ -36,26 +35,24 @@ func NewHTTP() Service {
 }
 
 func (s *HTTP) InitService() {
+	time.Sleep(time.Second * 5)
 	if s.worker.HasUpstreams() {
+		s.InitOutConnPool()
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
 
 func (s *HTTP) StopService() {
-	if s.outPool.Pool != nil {
-		s.outPool.Pool.ReleaseAll()
+	if s.outPool.UpstreamPool != nil {
+		for _, pool := range s.outPool.UpstreamPool {
+			(*pool).ReleaseAll()
+		}
 	}
 }
 
 func (s *HTTP) Start(args interface{}, worker *manager.WorkerManager) (err error) {
 	s.cfg = args.(HTTPArgs)
 	s.worker = worker
-
-	//add connection pool for upstream connections later
-	/*if *s.cfg.Parent != "" {
-		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
-		s.InitOutConnPool()
-	}*/
 
 	s.InitService()
 
@@ -140,7 +137,13 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			if upstream != nil {
 				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstream.GetAddress(), upstream.UpstreamTag)
 				connectStart := time.Now()
-				outConn, err = utils.ConnectHost(upstream.GetAddress(), *s.cfg.Timeout)
+				out, err := s.outPool.GetConnFromConnectionPool(upstream.GetAddress())
+				if err != nil {
+					outConn, err = utils.ConnectHost(upstream.GetAddress(), *s.cfg.Timeout)
+				} else {
+					log.Println("[Upstream] Using connection from pool")
+					outConn = out.(net.Conn)
+				}
 				connectLatency := time.Since(connectStart)
 				s.worker.RecordUpstreamLatency(upstream, connectLatency, nil)
 			} else {
@@ -175,16 +178,14 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		outConn.Write(req.HeadBuf)
 	}
 
-	// Data usage tracking
 	var bytesSent uint64
 	var bytesReceived uint64
-	username := req.GetBasicAuthUser()
 	sourceIP := strings.Split(inAddr, ":")[0]
 
-	// Parse destination host and port
-	destHost, destPortStr, _ := net.SplitHostPort(req.Host)
-	if destHost == "" {
+	destHost, destPortStr, err := net.SplitHostPort(req.Host)
+	if err != nil {
 		destHost = req.Host
+		destPortStr = "80"
 	}
 	var destPort uint16 = 80
 	if req.IsHTTPS() {
@@ -194,70 +195,24 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		destPort = uint16(p)
 	}
 
-	// Track connection in HealthCollector
-	if s.worker != nil && s.worker.HealthCollector != nil {
-		s.worker.HealthCollector.IncrementConnection()
-	}
+	s.worker.IncrementConnection()
 
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
-
-		// Decrement connection count
-		if s.worker != nil && s.worker.HealthCollector != nil {
-			s.worker.HealthCollector.DecrementConnection()
-			// Record success/error
-			if err != nil {
-				s.worker.HealthCollector.RecordError()
-			} else {
-				s.worker.HealthCollector.RecordSuccess()
-			}
-		}
-
-		// Send data usage to Captain when connection closes
-		if s.worker != nil && (bytesSent > 0 || bytesReceived > 0) {
-			poolID, poolName := s.worker.GetPoolInfo()
-			workerUUID, _ := uuid.Parse(s.worker.Worker.ID.String())
-			poolUUID, _ := uuid.Parse(poolID)
-
-			usage := manager.UserDataUsage{
-				UserID:          uuid.Nil,
-				Username:        username,
-				PoolID:          poolUUID,
-				PoolName:        poolName,
-				WorkerID:        workerUUID,
-				WorkerRegion:    s.worker.Worker.Pool.Region,
-				BytesSent:       atomic.LoadUint64(&bytesSent),
-				BytesReceived:   atomic.LoadUint64(&bytesReceived),
-				SourceIP:        sourceIP,
-				Protocol:        "HTTP",
-				DestinationHost: destHost,
-				DestinationPort: destPort,
-				StatusCode:      200, // Default success
-			}
-			if req.IsHTTPS() {
-				usage.Protocol = "HTTPS"
-			}
-
-			s.worker.SendDataUsage(usage)
-		}
-
+		s.worker.DecrementConnection(err != nil)
+		s.worker.RecordDataUsage(bytesSent, bytesReceived, req.User, sourceIP, destHost, destPort, req.IsHTTPS())
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
 	}, func(n int, isDownload bool) {
-		// Track bytes transferred
 		if isDownload {
 			atomic.AddUint64(&bytesReceived, uint64(n))
 		} else {
 			atomic.AddUint64(&bytesSent, uint64(n))
 		}
-		// Track throughput in HealthCollector
-		if s.worker != nil && s.worker.HealthCollector != nil {
-			s.worker.HealthCollector.AddThroughput(uint64(n))
-		}
+		s.worker.AddThroughput(uint64(n))
 	}, 0)
 	log.Printf("conn %s - %s - %s - %s connected [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 	return
-
 }
 
 func (s *HTTP) OutToUDP(inConn *net.Conn) (err error) {
@@ -272,11 +227,10 @@ func (s *HTTP) InitOutConnPool() {
 			*s.cfg.CheckParentInterval,
 			*s.cfg.ParentType == TYPE_TLS,
 			s.cfg.CertBytes, s.cfg.KeyBytes,
-			//address for the connection pool
-			"",
 			*s.cfg.Timeout,
 			*s.cfg.PoolSize,
 			*s.cfg.PoolSize*2,
+			s.worker.GetUpstreamAddress(),
 		)
 	}
 }

@@ -10,14 +10,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// HealthSample represents a single sample of CPU/memory metrics
 type HealthSample struct {
 	CpuUsage    float32
 	MemoryUsage float32
 	Timestamp   time.Time
 }
 
-// UpstreamStats tracks per-upstream health metrics
 type UpstreamStats struct {
 	UpstreamID   uuid.UUID
 	UpstreamTag  string
@@ -26,50 +24,38 @@ type UpstreamStats struct {
 	ErrorCount   uint64
 }
 
-// HealthCollector collects and aggregates health metrics over time
 type HealthCollector struct {
 	workerID   uuid.UUID
 	workerName string
 	region     string
 
-	// Metrics samples for averaging
 	samples []HealthSample
 	mu      sync.Mutex
 
-	// Connection tracking (atomic for thread safety)
 	activeConnections uint32
 	totalConnections  uint64
 	bytesThroughput   uint64
 	errorCount        uint64
 	successCount      uint64
 
-	// Upstream stats
 	upstreamStats map[uuid.UUID]*UpstreamStats
 	upstreamMu    sync.RWMutex
 
-	// Reference to upstream manager for getting current upstreams
-	upstreamMgr *UpstreamManager
-
-	// Ticker for periodic sampling
 	sampleTicker *time.Ticker
 	stopCh       chan struct{}
 }
 
-// NewHealthCollector creates a new health collector
-func NewHealthCollector(workerID uuid.UUID, workerName, region string, upstreamMgr *UpstreamManager) *HealthCollector {
+func NewHealthCollector(workerID uuid.UUID) *HealthCollector {
 	hc := &HealthCollector{
 		workerID:      workerID,
-		workerName:    workerName,
-		region:        region,
 		samples:       make([]HealthSample, 0),
 		upstreamStats: make(map[uuid.UUID]*UpstreamStats),
-		upstreamMgr:   upstreamMgr,
-		stopCh:        make(chan struct{}),
+
+		stopCh: make(chan struct{}),
 	}
 	return hc
 }
 
-// Start begins periodic sampling of system metrics
 func (h *HealthCollector) Start() {
 	h.sampleTicker = time.NewTicker(1 * time.Minute)
 	go func() {
@@ -85,7 +71,6 @@ func (h *HealthCollector) Start() {
 	log.Println("[HealthCollector] Started periodic sampling")
 }
 
-// Stop stops the periodic sampling
 func (h *HealthCollector) Stop() {
 	if h.sampleTicker != nil {
 		h.sampleTicker.Stop()
@@ -94,20 +79,15 @@ func (h *HealthCollector) Stop() {
 	log.Println("[HealthCollector] Stopped")
 }
 
-// RecordSample captures current CPU and memory usage
 func (h *HealthCollector) RecordSample() {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	// Calculate memory usage as percentage of system memory
-	// Using Alloc (currently allocated) vs Sys (total obtained from OS)
 	memUsage := float32(0)
 	if memStats.Sys > 0 {
 		memUsage = float32(memStats.Alloc) / float32(memStats.Sys) * 100
 	}
 
-	// CPU usage approximation using goroutine count ratio
-	// This is a simple heuristic - for more accurate CPU metrics, use gopsutil
 	numGoroutines := runtime.NumGoroutine()
 	numCPU := runtime.NumCPU()
 	cpuUsage := float32(numGoroutines) / float32(numCPU*100) * 100
@@ -126,33 +106,27 @@ func (h *HealthCollector) RecordSample() {
 	h.mu.Unlock()
 }
 
-// IncrementConnection tracks a new active connection
 func (h *HealthCollector) IncrementConnection() {
 	atomic.AddUint32(&h.activeConnections, 1)
 	atomic.AddUint64(&h.totalConnections, 1)
 }
 
-// DecrementConnection tracks connection close
 func (h *HealthCollector) DecrementConnection() {
-	atomic.AddUint32(&h.activeConnections, ^uint32(0)) // Decrement by 1
+	atomic.AddUint32(&h.activeConnections, ^uint32(0))
 }
 
-// AddThroughput adds bytes to throughput counter
 func (h *HealthCollector) AddThroughput(bytes uint64) {
 	atomic.AddUint64(&h.bytesThroughput, bytes)
 }
 
-// RecordError increments error counter
 func (h *HealthCollector) RecordError() {
 	atomic.AddUint64(&h.errorCount, 1)
 }
 
-// RecordSuccess increments success counter
 func (h *HealthCollector) RecordSuccess() {
 	atomic.AddUint64(&h.successCount, 1)
 }
 
-// RecordUpstreamLatency records latency for a specific upstream
 func (h *HealthCollector) RecordUpstreamLatency(upstreamID uuid.UUID, upstreamTag string, latency time.Duration, isError bool) {
 	h.upstreamMu.Lock()
 	defer h.upstreamMu.Unlock()
@@ -173,7 +147,6 @@ func (h *HealthCollector) RecordUpstreamLatency(upstreamID uuid.UUID, upstreamTa
 	}
 }
 
-// UpdateWorkerInfo updates worker name and region (called when config is received)
 func (h *HealthCollector) UpdateWorkerInfo(workerName, region string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -181,14 +154,12 @@ func (h *HealthCollector) UpdateWorkerInfo(workerName, region string) {
 	h.region = region
 }
 
-// BuildWorkerHealth computes averages and builds the WorkerHealth struct
 func (h *HealthCollector) BuildWorkerHealth() WorkerHealth {
 	h.mu.Lock()
 	samples := h.samples
-	h.samples = make([]HealthSample, 0) // Reset samples
+	h.samples = make([]HealthSample, 0)
 	h.mu.Unlock()
 
-	// Calculate average CPU and memory usage
 	var avgCpu, avgMem float32
 	if len(samples) > 0 {
 		var totalCpu, totalMem float32
@@ -200,24 +171,20 @@ func (h *HealthCollector) BuildWorkerHealth() WorkerHealth {
 		avgMem = totalMem / float32(len(samples))
 	}
 
-	// Get connection stats
 	activeConns := atomic.LoadUint32(&h.activeConnections)
-	totalConns := atomic.SwapUint64(&h.totalConnections, 0) // Reset after reading
-	throughput := atomic.SwapUint64(&h.bytesThroughput, 0)  // Reset after reading
-	errors := atomic.SwapUint64(&h.errorCount, 0)           // Reset after reading
-	successes := atomic.SwapUint64(&h.successCount, 0)      // Reset after reading
+	totalConns := atomic.SwapUint64(&h.totalConnections, 0)
+	throughput := atomic.SwapUint64(&h.bytesThroughput, 0)
+	errors := atomic.SwapUint64(&h.errorCount, 0)
+	successes := atomic.SwapUint64(&h.successCount, 0)
 
-	// Calculate error rate
 	var errorRate float32
 	totalRequests := errors + successes
 	if totalRequests > 0 {
 		errorRate = float32(errors) / float32(totalRequests) * 100
 	}
 
-	// Calculate bytes per second (assuming 1 hour interval = 3600 seconds)
 	bytesPerSec := throughput / 3600
 
-	// Determine worker status
 	status := "healthy"
 	if errorRate > 50 {
 		status = "degraded"
@@ -226,7 +193,6 @@ func (h *HealthCollector) BuildWorkerHealth() WorkerHealth {
 		status = "idle"
 	}
 
-	// Build upstream health
 	h.upstreamMu.Lock()
 	upstreams := make([]UpstreamHealth, 0, len(h.upstreamStats))
 	for _, stats := range h.upstreamStats {
@@ -252,7 +218,7 @@ func (h *HealthCollector) BuildWorkerHealth() WorkerHealth {
 			ErrorRate:   upstreamErrorRate,
 		})
 	}
-	// Reset upstream stats after building
+
 	h.upstreamStats = make(map[uuid.UUID]*UpstreamStats)
 	h.upstreamMu.Unlock()
 

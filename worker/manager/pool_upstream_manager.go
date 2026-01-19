@@ -84,3 +84,13 @@ func (m *UpstreamManager) HasUpstreams() bool {
 func (u *Upstream) GetAddress() string {
 	return fmt.Sprintf("%s:%d", u.UpstreamHost, u.UpstreamPort)
 }
+
+func (u *UpstreamManager) GetUpstreamAddress() []string {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	addresses := make([]string, len(u.upstreams))
+	for i, u := range u.upstreams {
+		addresses[i] = u.GetAddress()
+	}
+	return addresses
+}

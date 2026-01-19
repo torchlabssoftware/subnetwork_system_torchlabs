@@ -81,7 +81,6 @@ type UserDataUsage struct {
 	StatusCode      uint16    `json:"status_code"`
 }
 
-// WorkerHealth represents the health status of a worker for telemetry
 type WorkerHealth struct {
 	WorkerID              uuid.UUID        `json:"worker_id"`
 	WorkerName            string           `json:"worker_name"`
@@ -96,7 +95,6 @@ type WorkerHealth struct {
 	Upstreams             []UpstreamHealth `json:"upstreams"`
 }
 
-// UpstreamHealth represents the health status of an upstream proxy
 type UpstreamHealth struct {
 	UpstreamID  uuid.UUID `json:"upstream_id"`
 	UpstreamTag string    `json:"upstream_tag"`

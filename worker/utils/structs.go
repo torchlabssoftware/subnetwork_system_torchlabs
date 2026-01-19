@@ -461,53 +461,56 @@ func (req *HTTPRequest) GetBasicAuthUser() string {
 }
 
 type OutPool struct {
-	Pool      ConnPool
-	dur       int
-	isTLS     bool
-	certBytes []byte
-	keyBytes  []byte
-	address   string
-	timeout   int
+	UpstreamPool map[string]*ConnPool
+	dur          int
+	isTLS        bool
+	certBytes    []byte
+	keyBytes     []byte
+	timeout      int
 }
 
-func NewOutPool(dur int, isTLS bool, certBytes, keyBytes []byte, address string, timeout int, InitialCap int, MaxCap int) (op OutPool) {
+func NewOutPool(dur int, isTLS bool, certBytes, keyBytes []byte, timeout int, InitialCap int, MaxCap int, upstreamAddress []string) (op OutPool) {
 	op = OutPool{
 		dur:       dur,
 		isTLS:     isTLS,
 		certBytes: certBytes,
 		keyBytes:  keyBytes,
-		address:   address,
 		timeout:   timeout,
 	}
 	var err error
-	op.Pool, err = NewConnPool(poolConfig{
-		IsActive: func(conn interface{}) bool {
-			if conn == nil {
-				return false
-			}
-			c := conn.(net.Conn)
-			c.SetReadDeadline(time.Now().Add(time.Millisecond))
-			one := make([]byte, 1)
-			_, err := c.Read(one)
-			c.SetReadDeadline(time.Time{})
-			if err == io.EOF {
-				return false
-			}
-			return true
-		},
-		Release: func(conn interface{}) {
-			if conn != nil {
-				conn.(net.Conn).SetDeadline(time.Now().Add(time.Millisecond))
-				conn.(net.Conn).Close()
-			}
-		},
-		InitialCap: InitialCap,
-		MaxCap:     MaxCap,
-		Factory: func() (conn interface{}, err error) {
-			conn, err = op.getConn()
-			return
-		},
-	})
+	op.UpstreamPool = make(map[string]*ConnPool, len(upstreamAddress))
+	for _, address := range upstreamAddress {
+		pool, e := NewConnPool(poolConfig{
+			IsActive: func(conn interface{}) bool {
+				if conn == nil {
+					return false
+				}
+				c := conn.(net.Conn)
+				c.SetReadDeadline(time.Now().Add(time.Millisecond))
+				one := make([]byte, 1)
+				_, err := c.Read(one)
+				c.SetReadDeadline(time.Time{})
+				if err == io.EOF {
+					return false
+				}
+				return true
+			},
+			Release: func(conn interface{}) {
+				if conn != nil {
+					conn.(net.Conn).SetDeadline(time.Now().Add(time.Millisecond))
+					conn.(net.Conn).Close()
+				}
+			},
+			InitialCap: InitialCap,
+			MaxCap:     MaxCap,
+			Factory: func() (conn interface{}, err error) {
+				conn, err = op.getConn(address)
+				return
+			},
+		})
+		err = e
+		op.UpstreamPool[address] = &pool
+	}
 	if err != nil {
 		log.Fatalf("init conn pool fail ,%s", err)
 	} else {
@@ -520,15 +523,25 @@ func NewOutPool(dur int, isTLS bool, certBytes, keyBytes []byte, address string,
 	}
 	return
 }
-func (op *OutPool) getConn() (conn interface{}, err error) {
+
+func (op *OutPool) GetConnFromConnectionPool(address string) (conn interface{}, err error) {
+	if pool, ok := op.UpstreamPool[address]; ok {
+		conn, err = (*pool).Get()
+		return
+	}
+	err = fmt.Errorf("can not find pool for %s", address)
+	return
+}
+
+func (op *OutPool) getConn(address string) (conn interface{}, err error) {
 	if op.isTLS {
 		var _conn tls.Conn
-		_conn, err = TlsConnectHost(op.address, op.timeout, op.certBytes, op.keyBytes)
+		_conn, err = TlsConnectHost(address, op.timeout, op.certBytes, op.keyBytes)
 		if err == nil {
 			conn = net.Conn(&_conn)
 		}
 	} else {
-		conn, err = ConnectHost(op.address, op.timeout)
+		conn, err = ConnectHost(address, op.timeout)
 	}
 	return
 }
@@ -539,16 +552,18 @@ func (op *OutPool) initPoolDeamon() {
 			return
 		}
 		log.Printf("pool deamon started")
-		for {
-			time.Sleep(time.Second * time.Duration(op.dur))
-			conn, err := op.getConn()
-			if err != nil {
-				log.Printf("pool deamon err %s , release pool", err)
-				op.Pool.ReleaseAll()
-			} else {
-				conn.(net.Conn).SetDeadline(time.Now().Add(time.Millisecond))
-				conn.(net.Conn).Close()
-			}
+		for address, pool := range op.UpstreamPool {
+			go func() {
+				time.Sleep(time.Second * time.Duration(op.dur))
+				conn, err := op.getConn(address)
+				if err != nil {
+					log.Printf("pool deamon err %s , release pool", err)
+					(*pool).ReleaseAll()
+				} else {
+					conn.(net.Conn).SetDeadline(time.Now().Add(time.Millisecond))
+					conn.(net.Conn).Close()
+				}
+			}()
 		}
 	}()
 }
