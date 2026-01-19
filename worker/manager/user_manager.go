@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -12,13 +13,14 @@ import (
 )
 
 type User struct {
-	ID          uuid.UUID
-	Username    string
-	Password    string
-	Status      string
-	IpWhitelist []string
-	Pools       []PoolLimit
-	Sessions    map[string]Upstream
+	ID              uuid.UUID
+	Username        string
+	Password        string
+	Status          string
+	IpWhitelist     []string
+	Pools           []PoolLimit
+	Sessions        map[string]Upstream
+	connectionCount int
 }
 
 type CachedUser struct {
@@ -39,6 +41,7 @@ func NewUserManager() *UserManager {
 		TTL:         1 * time.Hour,
 	}
 	go userManager.cleanupLoop()
+	go userManager.resetConnectionCount()
 	return userManager
 }
 
@@ -155,4 +158,39 @@ func (u *UserManager) processVerifyUserResponse(userPayload UserPayload) {
 	}
 	u.SetUser(user)
 	respChan <- true
+}
+
+func (u *UserManager) addConnection(username string) error {
+	if user, ok := u.cachedUsers.Get(username); ok {
+		cachedUser := user.(CachedUser)
+		if cachedUser.User.connectionCount < 50 {
+			cachedUser.User.connectionCount++
+			return nil
+		}
+		return fmt.Errorf("user %s has reached the maximum number of connections", username)
+	}
+	return fmt.Errorf("user %s not found", username)
+}
+
+func (u *UserManager) removeConnection(username string) {
+	if user, ok := u.cachedUsers.Get(username); ok {
+		cachedUser := user.(CachedUser)
+		if cachedUser.User.connectionCount >= 0 {
+			cachedUser.User.connectionCount--
+		}
+		return
+	}
+}
+
+func (u *UserManager) resetConnectionCount() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		for item, val := range u.cachedUsers.Items() {
+			cachedUser := val.(CachedUser)
+			cachedUser.User.connectionCount = 0
+			u.cachedUsers.Set(item, cachedUser)
+		}
+
+	}
 }
