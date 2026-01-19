@@ -211,6 +211,14 @@ func (c *WorkerManager) GetUpstreamAddress() []string {
 	return c.upstreamManager.GetUpstreamAddress()
 }
 
+func (c *WorkerManager) AddUserConnection(username string) error {
+	return c.userManager.addConnection(username)
+}
+
+func (c *WorkerManager) RemoveUserConnection(username string) {
+	c.userManager.removeConnection(username)
+}
+
 func (c *WorkerManager) SendDataUsage(usage UserDataUsage) {
 	if c.websocketManager == nil {
 		log.Printf("[DataUsage] WebSocket not connected, cannot send data usage")

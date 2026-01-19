@@ -91,6 +91,13 @@ func (s *HTTP) callback(inConn net.Conn) {
 	}
 	address := req.Host
 
+	if err := s.worker.AddUserConnection(req.User); err != nil {
+		log.Printf("add user connection failed, err: %s", err)
+		inConn.Write([]byte("HTTP/1.1 429 Too Many Requests\r\n\r\n"))
+		utils.CloseConn(&inConn)
+		return
+	}
+
 	// Determine if we should use upstream proxy
 	useProxy := false
 	if s.worker.HasUpstreams() {
@@ -201,6 +208,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 		s.worker.DecrementConnection(err != nil)
 		s.worker.RecordDataUsage(bytesSent, bytesReceived, req.User, sourceIP, destHost, destPort, req.IsHTTPS())
+		s.worker.RemoveUserConnection(req.User)
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
 	}, func(n int, isDownload bool) {
