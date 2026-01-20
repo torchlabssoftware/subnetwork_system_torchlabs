@@ -159,14 +159,21 @@ func (q *Queries) GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 }
 
 const getWorkerById = `-- name: GetWorkerById :one
-SELECT w.id FROM worker w
+SELECT w.id,w.name,w.pool_id FROM worker w
 WHERE w.id = $1
 `
 
-func (q *Queries) GetWorkerById(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+type GetWorkerByIdRow struct {
+	ID     uuid.UUID
+	Name   string
+	PoolID uuid.UUID
+}
+
+func (q *Queries) GetWorkerById(ctx context.Context, id uuid.UUID) (GetWorkerByIdRow, error) {
 	row := q.db.QueryRowContext(ctx, getWorkerById, id)
-	err := row.Scan(&id)
-	return id, err
+	var i GetWorkerByIdRow
+	err := row.Scan(&i.ID, &i.Name, &i.PoolID)
+	return i, err
 }
 
 const getWorkerByName = `-- name: GetWorkerByName :one

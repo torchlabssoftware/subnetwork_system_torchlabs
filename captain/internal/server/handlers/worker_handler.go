@@ -16,13 +16,11 @@ import (
 
 type WorkerHandler struct {
 	workerService service.WorkerService
-	wsManager     models.WebsocketManagerInterface
 }
 
-func NewWorkerHandler(workerService service.WorkerService, wsManager models.WebsocketManagerInterface) *WorkerHandler {
+func NewWorkerHandler(workerService service.WorkerService) *WorkerHandler {
 	w := &WorkerHandler{
 		workerService: workerService,
-		wsManager:     wsManager,
 	}
 	return w
 }
@@ -63,7 +61,7 @@ func (wh *WorkerHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newOTP := wh.wsManager.NewOTP(req.WorkerId)
+	newOTP := wh.workerService.NewOTP(req.WorkerId)
 	resp := &models.WorkerLoginResponce{
 		Otp: newOTP,
 	}
@@ -76,12 +74,13 @@ func (wh *WorkerHandler) serveWS(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusBadRequest, "OTP is required", fmt.Errorf("otp is required"))
 		return
 	}
-	valid, workerID := wh.wsManager.VerifyOTP(otp)
+	valid, workerID := wh.workerService.VerifyOTP(otp)
 	if !valid {
 		functions.RespondwithError(w, http.StatusUnauthorized, "Invalid OTP", fmt.Errorf("invalid otp"))
 		return
 	}
-	wh.wsManager.ServeWS(w, r, workerID)
+
+	wh.workerService.ServeWS(w, r, workerID)
 }
 
 func (wh *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {

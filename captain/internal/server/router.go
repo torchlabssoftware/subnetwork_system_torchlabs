@@ -35,17 +35,17 @@ func NewRouter(pool *sql.DB, clickHouseConn driver.Conn) http.Handler {
 
 	q := repository.New(pool)
 
-	u := handlers.NewUserHandler(service.NewUserService(q, pool))
-
-	p := handlers.NewPoolHandler(service.NewPoolService(q, pool))
-
 	analyticsService := service.NewAnalyticsService(clickHouseConn)
 	analyticsService.StartWorkers()
 	a := handlers.NewAnalyticsHandler(analyticsService)
 
-	wsManager := wsm.NewWebsocketManager(q, analyticsService)
+	websocketManager := wsm.NewWebsocketManager(q, analyticsService)
 
-	w := handlers.NewWorkerHandler(service.NewWorkerService(q, pool), wsManager)
+	u := handlers.NewUserHandler(service.NewUserService(q, pool, websocketManager))
+
+	p := handlers.NewPoolHandler(service.NewPoolService(q, pool, websocketManager))
+
+	w := handlers.NewWorkerHandler(service.NewWorkerService(q, pool, websocketManager))
 
 	router.Route("/admin", func(r chi.Router) {
 		r.Mount("/users", u.AdminRoutes())

@@ -9,7 +9,9 @@ import (
 type WebsocketManagerInterface interface {
 	NewOTP(workerId *uuid.UUID) string
 	VerifyOTP(otp string) (bool, uuid.UUID)
-	ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID)
+	ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID, workerName string, poolId uuid.UUID)
+	NotifyUserChange(username string)
+	NotifyPoolChange(poolId uuid.UUID)
 }
 
 type AddWorkerRequest struct {

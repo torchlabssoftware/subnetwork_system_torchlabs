@@ -21,6 +21,7 @@ type Worker struct {
 	egress     chan Event
 	ID         uuid.UUID
 	Name       string
+	PoolId     uuid.UUID
 }
 
 type WorkerList map[uuid.UUID]*Worker
@@ -29,7 +30,7 @@ func NewWorker(conn *websocket.Conn, manager *WebsocketManager) *Worker {
 	return &Worker{
 		Connection: conn,
 		Manager:    manager,
-		egress:     make(chan Event),
+		egress:     make(chan Event, 100),
 	}
 }
 

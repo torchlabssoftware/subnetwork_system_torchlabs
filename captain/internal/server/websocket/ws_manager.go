@@ -67,7 +67,7 @@ func (ws *WebsocketManager) RouteEvent(event Event, w *Worker) error {
 	}
 }
 
-func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID) {
+func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID, workerName string, poolId uuid.UUID) {
 	conn, err := websocketUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "Could not open websocket connection", err)
@@ -76,6 +76,8 @@ func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request, work
 
 	worker := NewWorker(conn, ws)
 	worker.ID = workerID
+	worker.Name = workerName
+	worker.PoolId = poolId
 
 	if _, ok := ws.Workers[workerID]; ok {
 		log.Println("Worker already connected via WebSocket:", workerID)
@@ -257,4 +259,24 @@ func (ws *WebsocketManager) NewOTP(workerId *uuid.UUID) string {
 
 func (ws *WebsocketManager) VerifyOTP(otp string) (bool, uuid.UUID) {
 	return ws.OtpMap.VerifyOTP(otp)
+}
+
+func (ws *WebsocketManager) NotifyUserChange(username string) {
+	for _, worker := range ws.Workers {
+		worker.egress <- Event{
+			Type:    "user_change",
+			Payload: replyPayload{Success: true, Payload: username},
+		}
+	}
+}
+
+func (ws *WebsocketManager) NotifyPoolChange(poolId uuid.UUID) {
+	for _, worker := range ws.Workers {
+		if worker.PoolId == poolId {
+			worker.egress <- Event{
+				Type:    "pool_change",
+				Payload: replyPayload{Success: true, Payload: poolId},
+			}
+		}
+	}
 }
