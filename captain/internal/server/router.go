@@ -44,6 +44,7 @@ func NewRouter(pool *sql.DB, clickHouseConn driver.Conn) http.Handler {
 	a := handlers.NewAnalyticsHandler(analyticsService)
 
 	wsManager := wsm.NewWebsocketManager(q, analyticsService)
+
 	w := handlers.NewWorkerHandler(service.NewWorkerService(q, pool), wsManager)
 
 	router.Route("/admin", func(r chi.Router) {

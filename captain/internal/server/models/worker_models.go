@@ -1,6 +1,16 @@
 package server
 
-import "github.com/google/uuid"
+import (
+	"net/http"
+
+	"github.com/google/uuid"
+)
+
+type WebsocketManagerInterface interface {
+	NewOTP(workerId *uuid.UUID) string
+	VerifyOTP(otp string) (bool, uuid.UUID)
+	ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID)
+}
 
 type AddWorkerRequest struct {
 	RegionName *string    `json:"region_name"`

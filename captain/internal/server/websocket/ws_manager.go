@@ -250,3 +250,11 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 
 	return nil
 }
+
+func (ws *WebsocketManager) NewOTP(workerId *uuid.UUID) string {
+	return ws.OtpMap.NewOTP(*workerId).Key
+}
+
+func (ws *WebsocketManager) VerifyOTP(otp string) (bool, uuid.UUID) {
+	return ws.OtpMap.VerifyOTP(otp)
+}
