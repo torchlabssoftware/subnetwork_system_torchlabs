@@ -36,7 +36,7 @@ func GenerateproxyString(poolGroup string, countryCode string, isSticky bool, ci
 			config += "-session-" + uuid.New().String()[:8]
 		}
 	}
-	if sessionDuration != nil && *sessionDuration != 0 {
+	if sessionDuration != nil && *sessionDuration <= 0 {
 		config += "-lifetime-" + strconv.Itoa(*sessionDuration)
 	} else {
 		config += "-lifetime-" + "60"

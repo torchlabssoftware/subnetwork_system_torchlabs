@@ -89,13 +89,13 @@ type DeleteUserIpwhitelistRequest struct {
 
 type GenerateproxyStringRequest struct {
 	UserId          *uuid.UUID `json:"user_id"`
+	Amount          *int       `json:"amount"`
+	Format          *string    `json:"format"`
+	PoolGroup       *string    `json:"pool_group"`
+	ProxyType       *string    `json:"proxy_type"`
 	CountryCode     *string    `json:"country_code"`
 	State           *string    `json:"state"`
 	City            *string    `json:"city"`
-	PoolGroup       *string    `json:"pool_group"`
-	ProxyType       *string    `json:"proxy_type"`
 	IsSticky        *bool      `json:"is_sticky"`
 	SessionDuration *int       `json:"session_duration"`
-	Amount          *int       `json:"amount"`
-	Format          *string    `json:"format"`
 }
