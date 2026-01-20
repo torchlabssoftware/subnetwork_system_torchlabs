@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -46,6 +47,10 @@ func (m *WebsocketManager) HandleEvent(event Event) {
 		m.processConfig(event.Payload)
 	case "login_success":
 		m.processVerifyUserResponse(event.Payload)
+	case "user_change":
+		m.processUserChange(event.Payload)
+	case "pool_change":
+		m.processPoolChange(event.Payload)
 	case "error":
 		log.Printf("[websocket] Error from server: %v", event.Payload)
 	default:
@@ -108,4 +113,60 @@ func (m *WebsocketManager) processVerifyUserResponse(payload interface{}) {
 		return
 	}
 	m.worker.processVerifyUserResponse(userPayload)
+}
+
+func (m *WebsocketManager) processUserChange(payload interface{}) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[websocket] Failed to marshal user_change payload: %v", err)
+		return
+	}
+	var resp Response
+	if err := json.Unmarshal(data, &resp); err != nil {
+		log.Printf("[websocket] Failed to parse user_change: %v", err)
+		return
+	}
+	if !resp.Success {
+		log.Printf("[websocket] User change response indicates failure")
+		return
+	}
+	data, err = json.Marshal(resp.Payload)
+	if err != nil {
+		log.Printf("[websocket] Failed to marshal user_change payload data: %v", err)
+		return
+	}
+	var username string
+	if err := json.Unmarshal(data, &username); err != nil {
+		log.Printf("[websocket] Failed to parse UserPayload: %v", err)
+		return
+	}
+	m.worker.processUserChange(username)
+}
+
+func (m *WebsocketManager) processPoolChange(payload interface{}) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[websocket] Failed to marshal pool_change payload: %v", err)
+		return
+	}
+	var resp Response
+	if err := json.Unmarshal(data, &resp); err != nil {
+		log.Printf("[websocket] Failed to parse pool_change: %v", err)
+		return
+	}
+	if !resp.Success {
+		log.Printf("[websocket] Pool change response indicates failure")
+		return
+	}
+	data, err = json.Marshal(resp.Payload)
+	if err != nil {
+		log.Printf("[websocket] Failed to marshal pool_change payload data: %v", err)
+		return
+	}
+	var poolId uuid.UUID
+	if err := json.Unmarshal(data, &poolId); err != nil {
+		log.Printf("[websocket] Failed to parse PoolPayload: %v", err)
+		return
+	}
+	m.worker.processPoolChange(poolId)
 }

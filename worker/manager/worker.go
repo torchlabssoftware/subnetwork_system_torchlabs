@@ -247,3 +247,14 @@ func (c *WorkerManager) SendHealthTelemetry() {
 	log.Printf("[HealthTelemetry] Sent health: status=%s, cpu=%.2f%%, mem=%.2f%%, active_conns=%d, throughput=%d bytes/sec",
 		health.Status, health.CpuUsage, health.MemoryUsage, health.ActiveConnections, health.BytesThroughputPerSec)
 }
+
+func (c *WorkerManager) processUserChange(username string) {
+	c.userManager.RemoveUser(username)
+}
+
+func (c *WorkerManager) processPoolChange(poolId uuid.UUID) {
+	c.websocketManager.WriteEvent(Event{
+		Type:    "request_config",
+		Payload: poolId,
+	})
+}
