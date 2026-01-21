@@ -7,72 +7,24 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"github.com/google/uuid"
+	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
-
-type AnalyticsService interface {
-	RecordUserDataUsage(ctx context.Context, data UserDataUsage) error
-	RecordWorkerHealth(ctx context.Context, data WorkerHealth) error
-	RecordWebsiteAccess(ctx context.Context, data WebsiteAccess) error
-	GetUserUsage(ctx context.Context, userID string, from, to time.Time, granularity string) (interface{}, error)
-	GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]WorkerHealth, error)
-	GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]WebsiteAccess, error)
-	StartWorkers()
-}
 
 type analyticsService struct {
 	conn              driver.Conn
-	userDataChan      chan UserDataUsage
-	websiteAccessChan chan WebsiteAccess
+	userDataChan      chan models.UserDataUsage
+	websiteAccessChan chan models.WebsiteAccess
 }
 
-func NewAnalyticsService(conn driver.Conn) AnalyticsService {
+func NewAnalyticsService(conn driver.Conn) models.AnalyticsService {
 	return &analyticsService{
 		conn:              conn,
-		userDataChan:      make(chan UserDataUsage, 10000),
-		websiteAccessChan: make(chan WebsiteAccess, 10000),
+		userDataChan:      make(chan models.UserDataUsage, 10000),
+		websiteAccessChan: make(chan models.WebsiteAccess, 10000),
 	}
 }
 
-type UserDataUsage struct {
-	UserID          uuid.UUID `json:"user_id"`
-	Username        string    `json:"username"`
-	PoolID          uuid.UUID `json:"pool_id"`
-	PoolName        string    `json:"pool_name"`
-	WorkerID        uuid.UUID `json:"worker_id"`
-	WorkerRegion    string    `json:"worker_region"`
-	BytesSent       uint64    `json:"bytes_sent"`
-	BytesReceived   uint64    `json:"bytes_received"`
-	SourceIP        string    `json:"source_ip"`
-	Protocol        string    `json:"protocol"`
-	DestinationHost string    `json:"destination_host"`
-	DestinationPort uint16    `json:"destination_port"`
-	StatusCode      uint16    `json:"status_code"`
-}
-
-type UpstreamHealth struct {
-	UpstreamID  uuid.UUID `json:"upstream_id"`
-	UpstreamTag string    `json:"upstream_tag"`
-	Status      string    `json:"status"`
-	Latency     int64     `json:"latency"`
-	ErrorRate   float32   `json:"error_rate"`
-}
-
-type WorkerHealth struct {
-	WorkerID              uuid.UUID        `json:"worker_id"`
-	WorkerName            string           `json:"worker_name"`
-	Region                string           `json:"region"`
-	Status                string           `json:"status"`
-	CpuUsage              float32          `json:"cpu_usage"`
-	MemoryUsage           float32          `json:"memory_usage"`
-	ActiveConnections     uint32           `json:"active_connections"`
-	TotalConnections      uint64           `json:"total_connections"`
-	BytesThroughputPerSec uint64           `json:"bytes_throughput_per_sec"`
-	ErrorRate             float32          `json:"error_rate"`
-	Upstreams             []UpstreamHealth `json:"upstreams"`
-}
-
-func (s *analyticsService) RecordUserDataUsage(ctx context.Context, data UserDataUsage) error {
+func (s *analyticsService) RecordUserDataUsage(ctx context.Context, data models.UserDataUsage) error {
 	// Validate SourceIP
 	if data.SourceIP == "" {
 		data.SourceIP = "0.0.0.0"
@@ -87,7 +39,7 @@ func (s *analyticsService) RecordUserDataUsage(ctx context.Context, data UserDat
 	}
 }
 
-func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data WorkerHealth) error {
+func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data models.WorkerHealth) error {
 	// 1. Record Worker App Health
 	queryWorker := `
 		INSERT INTO analytics.worker_health (
@@ -132,22 +84,7 @@ func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data WorkerHe
 	return nil
 }
 
-type WebsiteAccess struct {
-	UserID        uuid.UUID `json:"user_id"`
-	Username      string    `json:"username"`
-	Domain        string    `json:"domain"`
-	Subdomain     string    `json:"subdomain"`
-	FullURL       string    `json:"full_url"`
-	BytesSent     uint64    `json:"bytes_sent"`
-	BytesReceived uint64    `json:"bytes_received"`
-	RequestMethod string    `json:"request_method"`
-	StatusCode    uint16    `json:"status_code"`
-	ContentType   string    `json:"content_type"`
-
-	SourceIP string `json:"source_ip"`
-}
-
-func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data WebsiteAccess) error {
+func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data models.WebsiteAccess) error {
 	// Validate SourceIP
 	if data.SourceIP == "" {
 		data.SourceIP = "0.0.0.0"
@@ -159,18 +96,6 @@ func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data Website
 	default:
 		return fmt.Errorf("analytics buffer full, dropping website access event")
 	}
-}
-
-type UserUsageHourly struct {
-	Date               time.Time `ch:"date" json:"date"`
-	Hour               time.Time `ch:"hour" json:"hour"`
-	UserID             uuid.UUID `ch:"user_id" json:"user_id"`
-	Username           string    `ch:"username" json:"username"`
-	BytesSent          uint64    `ch:"bytes_sent" json:"bytes_sent"`
-	BytesReceived      uint64    `ch:"bytes_received" json:"bytes_received"`
-	RequestCount       uint64    `ch:"request_count" json:"request_count"`
-	UniqueSessions     uint64    `ch:"unique_sessions" json:"unique_sessions"`
-	UniqueDestinations uint64    `ch:"unique_destinations" json:"unique_destinations"`
 }
 
 func (s *analyticsService) GetUserUsage(ctx context.Context, userID string, from, to time.Time, granularity string) (interface{}, error) {
@@ -188,7 +113,7 @@ func (s *analyticsService) GetUserUsage(ctx context.Context, userID string, from
 			GROUP BY date, hour, user_id, username
 			ORDER BY hour
 		`
-		var results []UserUsageHourly
+		var results []models.UserUsageHourly
 		if err := s.conn.Select(ctx, &results, query, userID, from, to); err != nil {
 			return nil, err
 		}
@@ -197,7 +122,7 @@ func (s *analyticsService) GetUserUsage(ctx context.Context, userID string, from
 	return nil, fmt.Errorf("unsupported granularity: %s", granularity)
 }
 
-func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]WorkerHealth, error) {
+func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]models.WorkerHealth, error) {
 	query := `
 		SELECT 
 			worker_id, worker_name, region, status, cpu_usage, memory_usage,
@@ -207,14 +132,14 @@ func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID string,
 		ORDER BY timestamp
 		LIMIT 1000
 	`
-	var results []WorkerHealth
+	var results []models.WorkerHealth
 	if err := s.conn.Select(ctx, &results, query, workerID, from, to); err != nil {
 		return nil, err
 	}
 	return results, nil
 }
 
-func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]WebsiteAccess, error) {
+func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]models.WebsiteAccess, error) {
 	query := `
 		SELECT
 			user_id, username, domain, subdomain, full_url,
@@ -225,7 +150,7 @@ func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID stri
 		ORDER BY timestamp
 		LIMIT 1000
 	`
-	var results []WebsiteAccess
+	var results []models.WebsiteAccess
 	if err := s.conn.Select(ctx, &results, query, userID, from, to); err != nil {
 		return nil, err
 	}
@@ -241,7 +166,7 @@ func (s *analyticsService) processUserDataBatch() {
 	batchSize := 1000
 	flushInterval := 5 * time.Second
 
-	batch := make([]UserDataUsage, 0, batchSize)
+	batch := make([]models.UserDataUsage, 0, batchSize)
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
 
@@ -262,7 +187,7 @@ func (s *analyticsService) processUserDataBatch() {
 	}
 }
 
-func (s *analyticsService) flushUserData(items []UserDataUsage) {
+func (s *analyticsService) flushUserData(items []models.UserDataUsage) {
 	if len(items) == 0 {
 		return
 	}
@@ -303,7 +228,7 @@ func (s *analyticsService) processWebsiteAccessBatch() {
 	batchSize := 1000
 	flushInterval := 5 * time.Second
 
-	batch := make([]WebsiteAccess, 0, batchSize)
+	batch := make([]models.WebsiteAccess, 0, batchSize)
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
 
@@ -324,7 +249,7 @@ func (s *analyticsService) processWebsiteAccessBatch() {
 	}
 }
 
-func (s *analyticsService) flushWebsiteAccess(items []WebsiteAccess) {
+func (s *analyticsService) flushWebsiteAccess(items []models.WebsiteAccess) {
 	if len(items) == 0 {
 		return
 	}

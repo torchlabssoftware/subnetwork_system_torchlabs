@@ -11,11 +11,11 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	handlers "github.com/torchlabssoftware/subnetwork_system/internal/server/handlers"
+	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 	service "github.com/torchlabssoftware/subnetwork_system/internal/server/service"
-	wsm "github.com/torchlabssoftware/subnetwork_system/internal/server/websocket"
 )
 
-func NewRouter(pool *sql.DB, clickHouseConn driver.Conn) http.Handler {
+func NewRouter(pool *sql.DB, clickHouseConn driver.Conn, websocketManager models.WebsocketManagerInterface) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -39,7 +39,7 @@ func NewRouter(pool *sql.DB, clickHouseConn driver.Conn) http.Handler {
 	analyticsService.StartWorkers()
 	a := handlers.NewAnalyticsHandler(analyticsService)
 
-	websocketManager := wsm.NewWebsocketManager(q, analyticsService)
+	websocketManager.SetAnalyticsandQueries(q, analyticsService)
 
 	u := handlers.NewUserHandler(service.NewUserService(q, pool, websocketManager))
 

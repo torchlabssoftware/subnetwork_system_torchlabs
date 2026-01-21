@@ -13,13 +13,13 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
-	service "github.com/torchlabssoftware/subnetwork_system/internal/server/service"
+	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
 var (
 	websocketUpgrader = &websocket.Upgrader{
-		ReadBufferSize:  4096,
-		WriteBufferSize: 4096,
+		ReadBufferSize:  1024 * 1024,
+		WriteBufferSize: 1024 * 1024,
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
@@ -31,20 +31,23 @@ type WebsocketManager struct {
 	sync.RWMutex
 	Handlers  map[string]EventHandler
 	queries   *repository.Queries
-	OtpMap    RetentionMap
-	analytics service.AnalyticsService
+	OtpMap    *RetentionMap
+	analytics models.AnalyticsService
 }
 
-func NewWebsocketManager(queries *repository.Queries, analytics service.AnalyticsService) *WebsocketManager {
+func NewWebsocketManager() *WebsocketManager {
 	w := &WebsocketManager{
-		Workers:   make(WorkerList),
-		Handlers:  make(map[string]EventHandler),
-		queries:   queries,
-		OtpMap:    NewRetentionMap(context.Background(), 10*time.Second),
-		analytics: analytics,
+		Workers:  make(WorkerList),
+		Handlers: make(map[string]EventHandler),
+		OtpMap:   NewRetentionMap(context.Background(), 10*time.Second),
 	}
 	w.setupEventHandlers()
 	return w
+}
+
+func (ws *WebsocketManager) SetAnalyticsandQueries(queries *repository.Queries, analytics models.AnalyticsService) {
+	ws.analytics = analytics
+	ws.queries = queries
 }
 
 func (ws *WebsocketManager) setupEventHandlers() {
@@ -73,121 +76,27 @@ func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request, work
 		functions.RespondwithError(w, http.StatusBadRequest, "Could not open websocket connection", err)
 		return
 	}
-
 	worker := NewWorker(conn, ws)
 	worker.ID = workerID
 	worker.Name = workerName
 	worker.PoolId = poolId
-
+	ws.RLock()
 	if _, ok := ws.Workers[workerID]; ok {
 		log.Println("Worker already connected via WebSocket:", workerID)
+		ws.RUnlock()
 		conn.Close()
 		return
 	}
-
+	ws.RUnlock()
 	go func() {
 		if err := ws.handleRequestConfig(Event{}, worker); err != nil {
 			log.Printf("Failed to send initial configuration to worker %s: %v", workerID, err)
 		}
 	}()
-
 	log.Println("Worker connected via WebSocket:", workerID)
-
 	ws.AddWorker(worker)
 	go worker.ReadMessage()
 	go worker.WriteMessage()
-}
-
-func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
-	var payload loginPayload
-	if m, ok := event.Payload.(map[string]interface{}); ok {
-		data, err := json.Marshal(m)
-		if err != nil {
-			return fmt.Errorf("could not marshal payload map: %v", err)
-		}
-
-		if err := json.Unmarshal(data, &payload); err != nil {
-			return fmt.Errorf("invalid login payload: %v", err)
-		}
-	} else {
-		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
-	}
-
-	user, err := ws.queries.GetUserByUsername(context.Background(), payload.Username)
-	if err != nil {
-		return fmt.Errorf("user login failed: %v", err)
-	}
-
-	if user.Password != payload.Password {
-		return fmt.Errorf("login failed: incorrect password")
-	}
-
-	succcessPayload := loginSuccessPayload{
-		ID:          user.ID,
-		Username:    user.Username,
-		Password:    user.Password,
-		Status:      user.Status,
-		IpWhitelist: user.IpWhitelist,
-		Pools:       user.Pools,
-	}
-
-	w.egress <- Event{
-		Type:    "login_success",
-		Payload: replyPayload{Success: true, Payload: succcessPayload},
-	}
-
-	return nil
-}
-
-func (ws *WebsocketManager) handleTelemetryUsage(event Event, w *Worker) error {
-	var payload service.UserDataUsage
-	if m, ok := event.Payload.(map[string]interface{}); ok {
-		data, err := json.Marshal(m)
-		if err != nil {
-			return fmt.Errorf("could not marshal payload map: %v", err)
-		}
-		if err := json.Unmarshal(data, &payload); err != nil {
-			return fmt.Errorf("invalid telemetry usage payload: %v", err)
-		}
-	} else {
-		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
-	}
-
-	return ws.analytics.RecordUserDataUsage(context.Background(), payload)
-}
-
-func (ws *WebsocketManager) handleTelemetryHealth(event Event, w *Worker) error {
-	var payload service.WorkerHealth
-	if m, ok := event.Payload.(map[string]interface{}); ok {
-		data, err := json.Marshal(m)
-		if err != nil {
-			return fmt.Errorf("could not marshal payload map: %v", err)
-		}
-		if err := json.Unmarshal(data, &payload); err != nil {
-			return fmt.Errorf("invalid telemetry health payload: %v", err)
-		}
-	} else {
-		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
-	}
-
-	return ws.analytics.RecordWorkerHealth(context.Background(), payload)
-}
-
-func (ws *WebsocketManager) handleTelemetryAccessLog(event Event, w *Worker) error {
-	var payload service.WebsiteAccess
-	if m, ok := event.Payload.(map[string]interface{}); ok {
-		data, err := json.Marshal(m)
-		if err != nil {
-			return fmt.Errorf("could not marshal payload map: %v", err)
-		}
-		if err := json.Unmarshal(data, &payload); err != nil {
-			return fmt.Errorf("invalid telemetry access log payload: %v", err)
-		}
-	} else {
-		return fmt.Errorf("invalid payload type: expected map[string]interface{}")
-	}
-
-	return ws.analytics.RecordWebsiteAccess(context.Background(), payload)
 }
 
 func (ws *WebsocketManager) AddWorker(w *Worker) {
@@ -205,22 +114,85 @@ func (ws *WebsocketManager) RemoveWorker(w *Worker) {
 	}
 }
 
+func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
+	var payload loginPayload
+	data, err := json.Marshal(event.Payload)
+	if err != nil {
+		return fmt.Errorf("could not marshal payload map: %v", err)
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return fmt.Errorf("invalid login payload: %v", err)
+	}
+	user, err := ws.queries.GetUserByUsername(context.Background(), payload.Username)
+	if err != nil {
+		return fmt.Errorf("user login failed: %v", err)
+	}
+	if user.Password != payload.Password {
+		return fmt.Errorf("login failed: incorrect password")
+	}
+	successPayload := loginSuccessPayload{
+		ID:          user.ID,
+		Username:    user.Username,
+		Password:    user.Password,
+		Status:      user.Status,
+		IpWhitelist: user.IpWhitelist,
+		Pools:       user.Pools,
+	}
+	w.egress <- Event{
+		Type:    "login_success",
+		Payload: replyPayload{Success: true, Payload: successPayload},
+	}
+	return nil
+}
+
+func (ws *WebsocketManager) handleTelemetryUsage(event Event, w *Worker) error {
+	var payload models.UserDataUsage
+	data, err := json.Marshal(event.Payload)
+	if err != nil {
+		return fmt.Errorf("could not marshal payload map: %v", err)
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return fmt.Errorf("invalid telemetry usage payload: %v", err)
+	}
+	return ws.analytics.RecordUserDataUsage(context.Background(), payload)
+}
+
+func (ws *WebsocketManager) handleTelemetryHealth(event Event, w *Worker) error {
+	var payload models.WorkerHealth
+	data, err := json.Marshal(event.Payload)
+	if err != nil {
+		return fmt.Errorf("could not marshal payload map: %v", err)
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return fmt.Errorf("invalid telemetry health payload: %v", err)
+	}
+	return ws.analytics.RecordWorkerHealth(context.Background(), payload)
+}
+
+func (ws *WebsocketManager) handleTelemetryAccessLog(event Event, w *Worker) error {
+	var payload models.WebsiteAccess
+	data, err := json.Marshal(event.Payload)
+	if err != nil {
+		return fmt.Errorf("could not marshal payload map: %v", err)
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return fmt.Errorf("invalid telemetry access log payload: %v", err)
+	}
+	return ws.analytics.RecordWebsiteAccess(context.Background(), payload)
+}
+
 func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 	rows, err := ws.queries.GetWorkerPoolConfig(context.Background(), w.ID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch worker pool config: %v", err)
 	}
-
 	if len(rows) == 0 {
 		return fmt.Errorf("no configuration found for worker %s", w.ID)
 	}
-
 	firstRow := rows[0]
-
 	if w.Name == "" {
 		w.Name = firstRow.WorkerName
 	}
-
 	config := ConfigPayload{
 		WorkerName:    firstRow.WorkerName,
 		Region:        firstRow.Region,
@@ -230,7 +202,6 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 		PoolSubdomain: firstRow.PoolSubdomain,
 		Upstreams:     make([]UpstreamConfig, 0),
 	}
-
 	for _, row := range rows {
 		config.Upstreams = append(config.Upstreams, UpstreamConfig{
 			UpstreamID:       row.UpstreamID,
@@ -244,12 +215,10 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 			Weight:           int(row.Weight),
 		})
 	}
-
 	w.egress <- Event{
 		Type:    "config",
 		Payload: replyPayload{Success: true, Payload: config},
 	}
-
 	return nil
 }
 
@@ -262,6 +231,8 @@ func (ws *WebsocketManager) VerifyOTP(otp string) (bool, uuid.UUID) {
 }
 
 func (ws *WebsocketManager) NotifyUserChange(username string) {
+	ws.Lock()
+	defer ws.Unlock()
 	for _, worker := range ws.Workers {
 		worker.egress <- Event{
 			Type:    "user_change",
@@ -271,6 +242,8 @@ func (ws *WebsocketManager) NotifyUserChange(username string) {
 }
 
 func (ws *WebsocketManager) NotifyPoolChange(poolId uuid.UUID) {
+	ws.Lock()
+	defer ws.Unlock()
 	for _, worker := range ws.Workers {
 		if worker.PoolId == poolId {
 			worker.egress <- Event{
@@ -279,4 +252,15 @@ func (ws *WebsocketManager) NotifyPoolChange(poolId uuid.UUID) {
 			}
 		}
 	}
+}
+
+func (ws *WebsocketManager) Shutdown() {
+	ws.Lock()
+	defer ws.Unlock()
+	for _, worker := range ws.Workers {
+		worker.Connection.Close()
+		close(worker.egress)
+	}
+	ws.Workers = make(map[uuid.UUID]*Worker)
+	log.Println("[websocket] All workers shut down")
 }

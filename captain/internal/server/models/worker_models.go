@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 )
 
 type WebsocketManagerInterface interface {
@@ -12,6 +13,7 @@ type WebsocketManagerInterface interface {
 	ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID, workerName string, poolId uuid.UUID)
 	NotifyUserChange(username string)
 	NotifyPoolChange(poolId uuid.UUID)
+	SetAnalyticsandQueries(queries *repository.Queries, analytics AnalyticsService)
 }
 
 type AddWorkerRequest struct {

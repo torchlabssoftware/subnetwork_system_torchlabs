@@ -12,7 +12,7 @@ import (
 
 var (
 	pongWait     = 10 * time.Second
-	pingIntervel = (pongWait * 9) / 10
+	pingInterval = (pongWait * 9) / 10
 )
 
 type Worker struct {
@@ -36,38 +36,29 @@ func NewWorker(conn *websocket.Conn, manager *WebsocketManager) *Worker {
 
 func (w *Worker) ReadMessage() {
 	defer func() {
-		close(w.egress)
 		w.Manager.RemoveWorker(w)
 		w.Connection.Close()
+		close(w.egress)
 	}()
-
 	if err := w.Connection.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		log.Println(err)
+		log.Println("[websocket] failed to set read deadline:", err)
 		return
 	}
-
 	w.Connection.SetPongHandler(w.PongHandler)
-
 	for {
 		_, payload, err := w.Connection.ReadMessage()
 		if err != nil {
-			log.Println("message read error.Connetion closed:", err)
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Error reading message: %v", err)
-			}
-			break
+			log.Println("[websocket] message read error.Connection closed:", err)
+			return
 		}
-
 		var request Event
-
 		if err := json.Unmarshal(payload, &request); err != nil {
-			log.Printf("errror marshelling event: %v", err)
-			break
+			log.Println("[websocket] error marshaling event:", err)
+			return
 		}
-
-		log.Println("Received message", request.Type)
+		log.Println("[websocket] Received message", request.Type)
 		if err := w.Manager.RouteEvent(request, w); err != nil {
-			log.Println("Error handleing message: ", err)
+			log.Println("[websocket] Error handling message: ", err)
 			w.egress <- Event{
 				Type:    "error",
 				Payload: replyPayload{Success: false, Payload: err.Error()},
@@ -77,38 +68,44 @@ func (w *Worker) ReadMessage() {
 }
 
 func (w *Worker) WriteMessage() {
+	ticker := time.NewTicker(pingInterval)
 	defer func() {
+		ticker.Stop()
 		w.Connection.Close()
 		w.Manager.RemoveWorker(w)
 	}()
-
-	ticker := time.NewTicker(pingIntervel)
-
 	for {
 		select {
 		case message, ok := <-w.egress:
 			if !ok {
 				if err := w.Connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
-					log.Println("Connetion closed:", err)
+					log.Println("[websocket] failed to send message:", err)
 				}
-				log.Println("message write error.Connetion closed:")
+				log.Println("[websocket] message write error.Connection closed:")
 				return
 			}
-
 			data, err := json.Marshal(message)
 			if err != nil {
-				log.Println(err)
+				log.Println("[websocket] error marshaling event:", err)
 				return
 			}
-
-			if err := w.Connection.WriteMessage(websocket.TextMessage, data); err != nil {
-				log.Printf("faild to send message: %v", err)
+			if err := w.Connection.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				log.Println("[websocket] failed to set write deadline:", err)
+				return
 			}
-			log.Println("Sent message", message.Type)
+			if err := w.Connection.WriteMessage(websocket.TextMessage, data); err != nil {
+				log.Println("[websocket] failed to send message:", err)
+				return
+			}
+			log.Println("[websocket] Sent message", message.Type)
 		case <-ticker.C:
-			log.Println("ping to", w.Name)
+			log.Println("[websocket] ping to", w.Name)
+			if err := w.Connection.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				log.Println("[websocket] failed to set write deadline:", err)
+				return
+			}
 			if err := w.Connection.WriteMessage(websocket.PingMessage, []byte(``)); err != nil {
-				log.Println("write message error")
+				log.Println("[websocket] ping message error")
 				return
 			}
 		}
@@ -116,9 +113,9 @@ func (w *Worker) WriteMessage() {
 }
 
 func (w *Worker) PongHandler(pongMsg string) error {
-	log.Println("pong from", w.Name)
+	log.Println("[websocket] pong from", w.Name)
 	if err := w.Manager.queries.UpdateWorkerLastSeen(context.Background(), w.ID); err != nil {
-		log.Printf("Failed to update last seen for worker %s: %v", w.Name, err)
+		log.Printf("[websocket] failed to update last seen for worker %s: %v", w.Name, err)
 	}
 	return w.Connection.SetReadDeadline(time.Now().Add(pongWait))
 }
