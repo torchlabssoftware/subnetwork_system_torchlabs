@@ -4,8 +4,6 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -17,16 +15,6 @@ type Config struct {
 }
 
 func Load() Config {
-	appEnv := os.Getenv("APP_ENV")
-	log.Println("APP_ENV:", appEnv)
-
-	if strings.ToLower(appEnv) == "dev" || strings.ToLower(appEnv) == "" {
-		if err := godotenv.Load(".env.dev"); err != nil {
-			log.Println("Error in loading .env.dev file:", err)
-		}
-	} else {
-		log.Println("Running in production mode, using environment variables from Docker")
-	}
 
 	config := Config{
 		PORT:           getEnv("PORT", "8080"),
