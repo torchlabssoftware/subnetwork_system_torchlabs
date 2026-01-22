@@ -32,14 +32,16 @@ type PoolService interface {
 }
 
 type PoolServiceImpl struct {
-	Queries *repository.Queries
-	DB      *sql.DB
+	Queries   *repository.Queries
+	DB        *sql.DB
+	wsManager models.WebsocketManagerInterface
 }
 
-func NewPoolService(queries *repository.Queries, db *sql.DB) PoolService {
+func NewPoolService(queries *repository.Queries, db *sql.DB, wsManager models.WebsocketManagerInterface) PoolService {
 	return &PoolServiceImpl{
-		Queries: queries,
-		DB:      db,
+		Queries:   queries,
+		DB:        db,
+		wsManager: wsManager,
 	}
 }
 
@@ -403,6 +405,8 @@ func (s *PoolServiceImpl) UpdatePool(ctx context.Context, tag string, req models
 		UpdatedAt: updatedPool.UpdatedAt,
 	}
 
+	s.wsManager.NotifyPoolChange(updatedPool.ID)
+
 	return res, http.StatusOK, "pool updated", nil
 }
 
@@ -416,6 +420,9 @@ func (s *PoolServiceImpl) DeletePool(ctx context.Context, tag string) (int, stri
 	if rowsAffected == 0 {
 		return http.StatusNotFound, "Nothing deleted", nil
 	}
+
+	pool, err := s.Queries.GetPoolByTagWithUpstreams(ctx, tag)
+	s.wsManager.NotifyPoolChange(pool[0].PoolID)
 	return http.StatusOK, "deleted", nil
 }
 
@@ -430,6 +437,10 @@ func (s *PoolServiceImpl) AddPoolUpstreamWeight(ctx context.Context, req models.
 	if err != nil {
 		return http.StatusInternalServerError, "Failed to add upstream weight", err
 	}
+
+	//change later
+	pool, err := s.Queries.GetPoolByTagWithUpstreams(ctx, *req.PoolTag)
+	s.wsManager.NotifyPoolChange(pool[0].PoolID)
 	return http.StatusCreated, "added", nil
 }
 
@@ -448,5 +459,9 @@ func (s *PoolServiceImpl) DeletePoolUpstreamWeight(ctx context.Context, req mode
 	if rowsAffected == 0 {
 		return http.StatusNotFound, "Nothing deleted", nil
 	}
+
+	//change later
+	pool, err := s.Queries.GetPoolByTagWithUpstreams(ctx, *req.PoolTag)
+	s.wsManager.NotifyPoolChange(pool[0].PoolID)
 	return http.StatusOK, "deleted", nil
 }

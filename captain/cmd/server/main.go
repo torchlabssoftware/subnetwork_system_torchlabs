@@ -11,6 +11,7 @@ import (
 	"github.com/torchlabssoftware/subnetwork_system/internal/config"
 	db "github.com/torchlabssoftware/subnetwork_system/internal/db"
 	"github.com/torchlabssoftware/subnetwork_system/internal/server"
+	wsm "github.com/torchlabssoftware/subnetwork_system/internal/server/websocket"
 )
 
 func main() {
@@ -28,7 +29,8 @@ func main() {
 	}
 	defer chConn.Close()
 
-	router := server.NewRouter(pgConn, chConn)
+	websocketManager := wsm.NewWebsocketManager()
+	router := server.NewRouter(pgConn, chConn, websocketManager)
 
 	srv := &http.Server{
 		Addr:         ":" + envConfig.PORT,
@@ -69,6 +71,7 @@ func main() {
 			log.Printf("error closing ClickHouse: %v", err)
 		}
 	}
+	websocketManager.Shutdown()
 	log.Println("server stopped")
 
 }

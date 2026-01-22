@@ -7,14 +7,14 @@ import (
 
 	"github.com/go-chi/chi"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
-	"github.com/torchlabssoftware/subnetwork_system/internal/server/service"
+	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
 type AnalyticsHandler struct {
-	service service.AnalyticsService
+	service models.AnalyticsService
 }
 
-func NewAnalyticsHandler(s service.AnalyticsService) *AnalyticsHandler {
+func NewAnalyticsHandler(s models.AnalyticsService) *AnalyticsHandler {
 	return &AnalyticsHandler{service: s}
 }
 

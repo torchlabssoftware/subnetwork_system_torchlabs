@@ -29,12 +29,13 @@ type UserService interface {
 }
 
 type userService struct {
-	queries *repository.Queries
-	db      *sql.DB
+	queries   *repository.Queries
+	db        *sql.DB
+	wsManager models.WebsocketManagerInterface
 }
 
-func NewUserService(q *repository.Queries, db *sql.DB) UserService {
-	return &userService{queries: q, db: db}
+func NewUserService(q *repository.Queries, db *sql.DB, wsManager models.WebsocketManagerInterface) UserService {
+	return &userService{queries: q, db: db, wsManager: wsManager}
 }
 
 func (u *userService) CreateUser(context context.Context, req *models.CreateUserRequest) (responce *models.CreateUserResponce, code int, message string, err error) {
@@ -185,10 +186,14 @@ func (u *userService) UpdateUserStatus(ctx context.Context, id uuid.UUID, req *m
 		UpdatedAt: user.UpdatedAt,
 	}
 
+	//change later
+	u.wsManager.NotifyUserChange(user.Username)
+
 	return response, http.StatusOK, "", nil
 }
 
 func (u *userService) DeleteUser(ctx context.Context, id uuid.UUID) (code int, message string, err error) {
+	user, _ := u.queries.GetUserbyId(ctx, id)
 	err = u.queries.DeleteUser(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -196,6 +201,8 @@ func (u *userService) DeleteUser(ctx context.Context, id uuid.UUID) (code int, m
 		}
 		return http.StatusInternalServerError, "server error", err
 	}
+	//change later
+	u.wsManager.NotifyUserChange(user.Username)
 	return http.StatusOK, "user deleted", nil
 }
 
@@ -273,6 +280,10 @@ func (u *userService) AddUserAllowPool(ctx context.Context, id uuid.UUID, req *m
 		UserPool: userPool,
 	}
 
+	//change later
+	user, err := u.queries.GetUserbyId(ctx, id)
+	u.wsManager.NotifyUserChange(user.Username)
+
 	return response, http.StatusCreated, "", nil
 }
 
@@ -290,6 +301,10 @@ func (u *userService) RemoveUserAllowPool(ctx context.Context, id uuid.UUID, req
 	if rowsAffected == 0 {
 		return http.StatusNotFound, "Nothing deleted from the database", nil
 	}
+
+	//change later
+	user, err := u.queries.GetUserbyId(ctx, id)
+	u.wsManager.NotifyUserChange(user.Username)
 
 	return http.StatusOK, "pool removed", nil
 }
@@ -328,6 +343,10 @@ func (u *userService) AddUserIpWhitelist(ctx context.Context, id uuid.UUID, req 
 		IpWhitelist: iplist.IpWhitelist,
 	}
 
+	//change later
+	user, err := u.queries.GetUserbyId(ctx, id)
+	u.wsManager.NotifyUserChange(user.Username)
+
 	return response, http.StatusCreated, "", nil
 }
 
@@ -345,6 +364,10 @@ func (u *userService) RemoveUserIpWhitelist(ctx context.Context, id uuid.UUID, r
 	if rowsAffected == 0 {
 		return http.StatusNotFound, "Nothing deleted from the database", nil
 	}
+
+	//change later
+	user, err := u.queries.GetUserbyId(ctx, id)
+	u.wsManager.NotifyUserChange(user.Username)
 
 	return http.StatusOK, "ip whitelist removed", nil
 }

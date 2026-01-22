@@ -7,28 +7,33 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
-	server "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
+	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
 type WorkerService interface {
 	Login(ctx context.Context, req uuid.UUID) (code int, message string, err error)
-	CreateWorker(ctx context.Context, req *server.AddWorkerRequest) (res *server.AddWorkerResponse, code int, message string, err error)
-	GetWorkers(ctx context.Context) (res []server.AddWorkerResponse, code int, message string, err error)
-	GetWorkerByName(ctx context.Context, name string) (res *server.AddWorkerResponse, code int, message string, err error)
+	CreateWorker(ctx context.Context, req *models.AddWorkerRequest) (res *models.AddWorkerResponse, code int, message string, err error)
+	GetWorkers(ctx context.Context) (res []models.AddWorkerResponse, code int, message string, err error)
+	GetWorkerByName(ctx context.Context, name string) (res *models.AddWorkerResponse, code int, message string, err error)
 	DeleteWorker(ctx context.Context, name string) (code int, message string, err error)
-	AddWorkerDomain(ctx context.Context, name string, req *server.AddWorkerDomainRequest) (code int, message string, err error)
-	DeleteWorkerDomain(ctx context.Context, name string, req *server.DeleteWorkerDomainRequest) (code int, message string, err error)
+	AddWorkerDomain(ctx context.Context, name string, req *models.AddWorkerDomainRequest) (code int, message string, err error)
+	DeleteWorkerDomain(ctx context.Context, name string, req *models.DeleteWorkerDomainRequest) (code int, message string, err error)
+	NewOTP(workerId *uuid.UUID) string
+	VerifyOTP(otp string) (bool, uuid.UUID)
+	ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID)
 }
 
 type workerService struct {
-	queries *repository.Queries
-	db      *sql.DB
+	queries   *repository.Queries
+	db        *sql.DB
+	wsManager models.WebsocketManagerInterface
 }
 
-func NewWorkerService(queries *repository.Queries, db *sql.DB) WorkerService {
+func NewWorkerService(queries *repository.Queries, db *sql.DB, wsManager models.WebsocketManagerInterface) WorkerService {
 	workerService := &workerService{
-		queries: queries,
-		db:      db,
+		queries:   queries,
+		db:        db,
+		wsManager: wsManager,
 	}
 	return workerService
 }
@@ -44,7 +49,7 @@ func (s *workerService) Login(ctx context.Context, req uuid.UUID) (code int, mes
 	return http.StatusOK, "", nil
 }
 
-func (s *workerService) CreateWorker(ctx context.Context, req *server.AddWorkerRequest) (res *server.AddWorkerResponse, code int, message string, err error) {
+func (s *workerService) CreateWorker(ctx context.Context, req *models.AddWorkerRequest) (res *models.AddWorkerResponse, code int, message string, err error) {
 	id := uuid.New()
 	var name string
 	switch *req.RegionName {
@@ -69,7 +74,7 @@ func (s *workerService) CreateWorker(ctx context.Context, req *server.AddWorkerR
 		return nil, http.StatusInternalServerError, "Internal Server Error", err
 	}
 
-	return &server.AddWorkerResponse{
+	return &models.AddWorkerResponse{
 		ID:         worker.ID.String(),
 		Name:       worker.Name,
 		RegionName: *req.RegionName,
@@ -83,7 +88,7 @@ func (s *workerService) CreateWorker(ctx context.Context, req *server.AddWorkerR
 	}, http.StatusOK, "", nil
 }
 
-func (s *workerService) GetWorkers(ctx context.Context) (res []server.AddWorkerResponse, code int, message string, err error) {
+func (s *workerService) GetWorkers(ctx context.Context) (res []models.AddWorkerResponse, code int, message string, err error) {
 	workers, err := s.queries.GetAllWorkers(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -92,9 +97,9 @@ func (s *workerService) GetWorkers(ctx context.Context) (res []server.AddWorkerR
 		return nil, http.StatusInternalServerError, "Internal Server Error", err
 	}
 
-	var resp []server.AddWorkerResponse
+	var resp []models.AddWorkerResponse
 	for _, worker := range workers {
-		resp = append(resp, server.AddWorkerResponse{
+		resp = append(resp, models.AddWorkerResponse{
 			ID:         worker.ID.String(),
 			Name:       worker.Name,
 			RegionName: worker.RegionName,
@@ -111,7 +116,7 @@ func (s *workerService) GetWorkers(ctx context.Context) (res []server.AddWorkerR
 	return resp, http.StatusOK, "", nil
 }
 
-func (s *workerService) GetWorkerByName(ctx context.Context, name string) (res *server.AddWorkerResponse, code int, message string, err error) {
+func (s *workerService) GetWorkerByName(ctx context.Context, name string) (res *models.AddWorkerResponse, code int, message string, err error) {
 	worker, err := s.queries.GetWorkerByName(ctx, name)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -120,7 +125,7 @@ func (s *workerService) GetWorkerByName(ctx context.Context, name string) (res *
 		return nil, http.StatusInternalServerError, "Internal Server Error", err
 	}
 
-	return &server.AddWorkerResponse{
+	return &models.AddWorkerResponse{
 		ID:         worker.ID.String(),
 		Name:       worker.Name,
 		RegionName: worker.RegionName,
@@ -146,7 +151,7 @@ func (s *workerService) DeleteWorker(ctx context.Context, name string) (code int
 	return http.StatusOK, "worker deleted successfully", nil
 }
 
-func (s *workerService) AddWorkerDomain(ctx context.Context, name string, req *server.AddWorkerDomainRequest) (code int, message string, err error) {
+func (s *workerService) AddWorkerDomain(ctx context.Context, name string, req *models.AddWorkerDomainRequest) (code int, message string, err error) {
 	_, err = s.queries.AddWorkerDomain(ctx, repository.AddWorkerDomainParams{
 		Name:    name,
 		Column2: req.Domain,
@@ -160,7 +165,7 @@ func (s *workerService) AddWorkerDomain(ctx context.Context, name string, req *s
 	return http.StatusCreated, "Domains added successfully", nil
 }
 
-func (s *workerService) DeleteWorkerDomain(ctx context.Context, name string, req *server.DeleteWorkerDomainRequest) (code int, message string, err error) {
+func (s *workerService) DeleteWorkerDomain(ctx context.Context, name string, req *models.DeleteWorkerDomainRequest) (code int, message string, err error) {
 	result, err := s.queries.DeleteWorkerDomain(ctx, repository.DeleteWorkerDomainParams{
 		Name:    name,
 		Column2: req.Domain,
@@ -173,4 +178,20 @@ func (s *workerService) DeleteWorkerDomain(ctx context.Context, name string, req
 		return http.StatusNotFound, "No domains deleted", nil
 	}
 	return http.StatusOK, "Domain deleted successfully", nil
+}
+
+func (s *workerService) NewOTP(workerId *uuid.UUID) string {
+	return s.wsManager.NewOTP(workerId)
+}
+
+func (s *workerService) VerifyOTP(otp string) (bool, uuid.UUID) {
+	return s.wsManager.VerifyOTP(otp)
+}
+
+func (s *workerService) ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID) {
+	worker, err := s.queries.GetWorkerById(context.Background(), workerID)
+	if err != nil {
+		return
+	}
+	s.wsManager.ServeWS(w, r, workerID, worker.Name, worker.PoolID)
 }

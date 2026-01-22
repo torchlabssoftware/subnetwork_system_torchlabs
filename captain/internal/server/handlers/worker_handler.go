@@ -10,20 +10,17 @@ import (
 
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
-	server "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
+	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 	"github.com/torchlabssoftware/subnetwork_system/internal/server/service"
-	wsm "github.com/torchlabssoftware/subnetwork_system/internal/server/websocket"
 )
 
 type WorkerHandler struct {
 	workerService service.WorkerService
-	wsManager     *wsm.WebsocketManager
 }
 
-func NewWorkerHandler(workerService service.WorkerService, wsManager *wsm.WebsocketManager) *WorkerHandler {
+func NewWorkerHandler(workerService service.WorkerService) *WorkerHandler {
 	w := &WorkerHandler{
 		workerService: workerService,
-		wsManager:     wsManager,
 	}
 	return w
 }
@@ -49,7 +46,7 @@ func (wh *WorkerHandler) WorkerRoutes() http.Handler {
 }
 
 func (wh *WorkerHandler) login(w http.ResponseWriter, r *http.Request) {
-	var req server.WorkerLoginRequest
+	var req models.WorkerLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
 		return
@@ -64,9 +61,9 @@ func (wh *WorkerHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newOTP := wh.wsManager.OtpMap.NewOTP(*req.WorkerId)
-	resp := &server.WorkerLoginResponce{
-		Otp: newOTP.Key,
+	newOTP := wh.workerService.NewOTP(req.WorkerId)
+	resp := &models.WorkerLoginResponce{
+		Otp: newOTP,
 	}
 	functions.RespondwithJSON(w, code, resp)
 }
@@ -77,16 +74,17 @@ func (wh *WorkerHandler) serveWS(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusBadRequest, "OTP is required", fmt.Errorf("otp is required"))
 		return
 	}
-	valid, workerID := wh.wsManager.OtpMap.VerifyOTP(otp)
+	valid, workerID := wh.workerService.VerifyOTP(otp)
 	if !valid {
 		functions.RespondwithError(w, http.StatusUnauthorized, "Invalid OTP", fmt.Errorf("invalid otp"))
 		return
 	}
-	wh.wsManager.ServeWS(w, r, workerID)
+
+	wh.workerService.ServeWS(w, r, workerID)
 }
 
 func (wh *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
-	var req server.AddWorkerRequest
+	var req models.AddWorkerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
 		return
@@ -174,7 +172,7 @@ func (wh *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req server.AddWorkerDomainRequest
+	var req models.AddWorkerDomainRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
 		return
@@ -201,7 +199,7 @@ func (wh *WorkerHandler) DeleteWorkerDomain(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var req server.DeleteWorkerDomainRequest
+	var req models.DeleteWorkerDomainRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
 		return

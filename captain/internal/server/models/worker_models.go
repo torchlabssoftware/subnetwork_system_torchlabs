@@ -1,6 +1,20 @@
 package server
 
-import "github.com/google/uuid"
+import (
+	"net/http"
+
+	"github.com/google/uuid"
+	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
+)
+
+type WebsocketManagerInterface interface {
+	NewOTP(workerId *uuid.UUID) string
+	VerifyOTP(otp string) (bool, uuid.UUID)
+	ServeWS(w http.ResponseWriter, r *http.Request, workerID uuid.UUID, workerName string, poolId uuid.UUID)
+	NotifyUserChange(username string)
+	NotifyPoolChange(poolId uuid.UUID)
+	SetAnalyticsandQueries(queries *repository.Queries, analytics AnalyticsService)
+}
 
 type AddWorkerRequest struct {
 	RegionName *string    `json:"region_name"`

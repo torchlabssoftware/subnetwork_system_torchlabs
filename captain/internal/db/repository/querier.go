@@ -42,7 +42,7 @@ type Querier interface {
 	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) ([]string, error)
 	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
-	GetWorkerById(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetWorkerById(ctx context.Context, id uuid.UUID) (GetWorkerByIdRow, error)
 	GetWorkerByName(ctx context.Context, name string) (GetWorkerByNameRow, error)
 	GetWorkerPoolConfig(ctx context.Context, id uuid.UUID) ([]GetWorkerPoolConfigRow, error)
 	InsertPoolUpstreamWeight(ctx context.Context, arg InsertPoolUpstreamWeightParams) ([]PoolUpstreamWeight, error)
