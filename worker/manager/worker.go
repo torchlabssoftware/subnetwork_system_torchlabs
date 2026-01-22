@@ -119,9 +119,13 @@ func (c *WorkerManager) processVerifyUserResponse(userPayload UserPayload) {
 }
 
 func (c *WorkerManager) VerifyUser(user, pass string) bool {
+	poolTag := ""
+	if c.Worker.Pool != nil {
+		poolTag = c.Worker.Pool.PoolTag
+	}
 	return c.userManager.VerifyUser(user, pass, func(event Event) {
 		c.websocketManager.WriteEvent(event)
-	}, c.Worker.Pool.PoolTag)
+	}, poolTag)
 }
 
 func (c *WorkerManager) HasUpstreams() bool {
@@ -173,13 +177,17 @@ func (c *WorkerManager) RecordDataUsage(bytesSent, bytesReceived uint64, usernam
 		workerUUID, _ := uuid.Parse(c.Worker.ID.String())
 		poolUUID, _ := uuid.Parse(poolID)
 
+		workerRegion := ""
+		if c.Worker.Pool != nil {
+			workerRegion = c.Worker.Pool.Region
+		}
 		usage := UserDataUsage{
 			UserID:          uuid.Nil,
 			Username:        username,
 			PoolID:          poolUUID,
 			PoolName:        poolName,
 			WorkerID:        workerUUID,
-			WorkerRegion:    c.Worker.Pool.Region,
+			WorkerRegion:    workerRegion,
 			BytesSent:       atomic.LoadUint64(&bytesSent),
 			BytesReceived:   atomic.LoadUint64(&bytesReceived),
 			SourceIP:        sourceIP,
