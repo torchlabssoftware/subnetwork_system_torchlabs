@@ -3,6 +3,7 @@ package manager
 import (
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,7 +32,7 @@ func NewWorkerManager(workerID, baseURL, apiKey string) (*WorkerManager, error) 
 		return nil, fmt.Errorf("[worker] invalid worker ID: %w", err)
 	}
 	upstreamManager := NewUpstreamManager()
-	healthCollector := NewHealthCollector(workerUUID, "", "", upstreamManager)
+	healthCollector := NewHealthCollector(workerUUID)
 	userManager := NewUserManager()
 	w := &WorkerManager{
 		Worker: worker{
@@ -113,14 +114,18 @@ func (c *WorkerManager) processConfig(cfg ConfigPayload) {
 	log.Printf("[worker] Upstreams count: %d", len(cfg.Upstreams))
 }
 
-func (c *WorkerManager) VerifyUser(user, pass string) bool {
-	return c.userManager.VerifyUser(user, pass, func(event Event) {
-		c.websocketManager.WriteEvent(event)
-	}, c.Worker.Pool.PoolTag)
-}
-
 func (c *WorkerManager) processVerifyUserResponse(userPayload UserPayload) {
 	c.userManager.processVerifyUserResponse(userPayload)
+}
+
+func (c *WorkerManager) VerifyUser(user, pass string) bool {
+	poolTag := ""
+	if c.Worker.Pool != nil {
+		poolTag = c.Worker.Pool.PoolTag
+	}
+	return c.userManager.VerifyUser(user, pass, func(event Event) {
+		c.websocketManager.WriteEvent(event)
+	}, poolTag)
 }
 
 func (c *WorkerManager) HasUpstreams() bool {
@@ -153,39 +158,54 @@ func (c *WorkerManager) RecordUpstreamLatency(upstream *Upstream, connectLatency
 	)
 }
 
-// SendDataUsage sends a user data usage event to Captain via WebSocket
-func (c *WorkerManager) SendDataUsage(usage UserDataUsage) {
-	if c.websocketManager == nil {
-		log.Printf("[DataUsage] WebSocket not connected, cannot send data usage")
-		return
-	}
-
-	event := Event{
-		Type:    "telemetry_usage",
-		Payload: usage,
-	}
-
-	c.websocketManager.WriteEvent(event)
-	log.Printf("[DataUsage] Sent usage: user=%s, bytes_sent=%d, bytes_received=%d, dest=%s:%d",
-		usage.Username, usage.BytesSent, usage.BytesReceived, usage.DestinationHost, usage.DestinationPort)
+func (c *WorkerManager) IncrementConnection() {
+	c.HealthCollector.IncrementConnection()
 }
 
-// SendHealthTelemetry sends worker health telemetry to Captain via WebSocket
-func (c *WorkerManager) SendHealthTelemetry() {
-	if c.websocketManager == nil {
-		log.Printf("[HealthTelemetry] WebSocket not connected, cannot send health telemetry")
-		return
+func (c *WorkerManager) DecrementConnection(isErr bool) {
+	c.HealthCollector.DecrementConnection()
+	if isErr {
+		c.HealthCollector.RecordError()
+	} else {
+		c.HealthCollector.RecordSuccess()
 	}
+}
 
-	health := c.HealthCollector.BuildWorkerHealth()
-	event := Event{
-		Type:    "telemetry_health",
-		Payload: health,
+func (c *WorkerManager) RecordDataUsage(bytesSent, bytesReceived uint64, username, sourceIP, destHost string, destPort uint16, reqIsHTTPS bool) {
+	if bytesSent > 0 || bytesReceived > 0 {
+		poolID, poolName := c.GetPoolInfo()
+		workerUUID, _ := uuid.Parse(c.Worker.ID.String())
+		poolUUID, _ := uuid.Parse(poolID)
+
+		workerRegion := ""
+		if c.Worker.Pool != nil {
+			workerRegion = c.Worker.Pool.Region
+		}
+		usage := UserDataUsage{
+			UserID:          uuid.Nil,
+			Username:        username,
+			PoolID:          poolUUID,
+			PoolName:        poolName,
+			WorkerID:        workerUUID,
+			WorkerRegion:    workerRegion,
+			BytesSent:       atomic.LoadUint64(&bytesSent),
+			BytesReceived:   atomic.LoadUint64(&bytesReceived),
+			SourceIP:        sourceIP,
+			Protocol:        "HTTP",
+			DestinationHost: destHost,
+			DestinationPort: destPort,
+			StatusCode:      200,
+		}
+		if reqIsHTTPS {
+			usage.Protocol = "HTTPS"
+		}
+
+		c.SendDataUsage(usage)
 	}
+}
 
-	c.websocketManager.WriteEvent(event)
-	log.Printf("[HealthTelemetry] Sent health: status=%s, cpu=%.2f%%, mem=%.2f%%, active_conns=%d, throughput=%d bytes/sec",
-		health.Status, health.CpuUsage, health.MemoryUsage, health.ActiveConnections, health.BytesThroughputPerSec)
+func (c *WorkerManager) AddThroughput(bytes uint64) {
+	c.HealthCollector.AddThroughput(bytes)
 }
 
 func (c *WorkerManager) GetPoolInfo() (poolID, poolName string) {
@@ -193,4 +213,56 @@ func (c *WorkerManager) GetPoolInfo() (poolID, poolName string) {
 		return c.Worker.Pool.PoolId.String(), c.Worker.Pool.PoolTag
 	}
 	return "", ""
+}
+
+func (c *WorkerManager) GetUpstreamAddress() []string {
+	return c.upstreamManager.GetUpstreamAddress()
+}
+
+func (c *WorkerManager) AddUserConnection(username string) error {
+	return c.userManager.addConnection(username)
+}
+
+func (c *WorkerManager) RemoveUserConnection(username string) {
+	c.userManager.removeConnection(username)
+}
+
+func (c *WorkerManager) SendDataUsage(usage UserDataUsage) {
+	if c.websocketManager == nil {
+		log.Printf("[DataUsage] WebSocket not connected, cannot send data usage")
+		return
+	}
+	event := Event{
+		Type:    "telemetry_usage",
+		Payload: usage,
+	}
+	c.websocketManager.WriteEvent(event)
+	log.Printf("[DataUsage] Sent usage: user=%s, bytes_sent=%d, bytes_received=%d, dest=%s:%d",
+		usage.Username, usage.BytesSent, usage.BytesReceived, usage.DestinationHost, usage.DestinationPort)
+}
+
+func (c *WorkerManager) SendHealthTelemetry() {
+	if c.websocketManager == nil {
+		log.Printf("[HealthTelemetry] WebSocket not connected, cannot send health telemetry")
+		return
+	}
+	health := c.HealthCollector.BuildWorkerHealth()
+	event := Event{
+		Type:    "telemetry_health",
+		Payload: health,
+	}
+	c.websocketManager.WriteEvent(event)
+	log.Printf("[HealthTelemetry] Sent health: status=%s, cpu=%.2f%%, mem=%.2f%%, active_conns=%d, throughput=%d bytes/sec",
+		health.Status, health.CpuUsage, health.MemoryUsage, health.ActiveConnections, health.BytesThroughputPerSec)
+}
+
+func (c *WorkerManager) processUserChange(username string) {
+	c.userManager.RemoveUser(username)
+}
+
+func (c *WorkerManager) processPoolChange(poolId uuid.UUID) {
+	c.websocketManager.WriteEvent(Event{
+		Type:    "request_config",
+		Payload: poolId,
+	})
 }

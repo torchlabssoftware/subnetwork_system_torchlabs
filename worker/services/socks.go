@@ -8,6 +8,9 @@ import (
 	"net"
 	"runtime/debug"
 	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/utils"
@@ -59,14 +62,18 @@ func NewSOCKS() Service {
 }
 
 func (s *SOCKS) InitService() {
+	time.Sleep(time.Second * 5)
 	if s.worker.HasUpstreams() {
+		s.InitOutConnPool()
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
 
 func (s *SOCKS) StopService() {
-	if s.outPool.Pool != nil {
-		s.outPool.Pool.ReleaseAll()
+	if s.outPool.UpstreamPool != nil {
+		for _, pool := range s.outPool.UpstreamPool {
+			(*pool).ReleaseAll()
+		}
 	}
 }
 
@@ -107,9 +114,17 @@ func (s *SOCKS) callback(inConn net.Conn) {
 		}
 	}()
 
-	err := s.handleHandshake(&inConn)
+	user, tag, err := s.handleHandshake(&inConn)
 	if err != nil {
 		log.Printf("socks5 handshake error from %s: %s", inConn.RemoteAddr(), err)
+		utils.CloseConn(&inConn)
+		return
+	}
+
+	// Check user connection limits
+	if err := s.worker.AddUserConnection(user); err != nil {
+		log.Printf("add user connection failed, err: %s", err)
+		s.sendReply(&inConn, SOCKS5_REP_CONN_NOT_ALLOWED)
 		utils.CloseConn(&inConn)
 		return
 	}
@@ -118,48 +133,51 @@ func (s *SOCKS) callback(inConn net.Conn) {
 	address, err := s.handleRequest(&inConn)
 	if err != nil {
 		log.Printf("socks5 request error from %s: %s", inConn.RemoteAddr(), err)
+		s.worker.RemoveUserConnection(user)
 		utils.CloseConn(&inConn)
 		return
 	}
 
-	useProxy := true
+	// Determine if we should use upstream proxy (FIXED: logic was inverted)
+	useProxy := false
 	if s.worker.HasUpstreams() {
-		useProxy = false
-	} else if *s.cfg.Always {
-		useProxy = true
-	} else {
-		s.checker.Add(address, true, "CONNECT", "", nil)
-		useProxy, _, _ = s.checker.IsBlocked(address)
+		if *s.cfg.Always {
+			useProxy = true
+		} else {
+			s.checker.Add(address, true, "CONNECT", "", nil)
+			useProxy, _, _ = s.checker.IsBlocked(address)
+		}
 	}
 	log.Printf("use proxy : %v, %s", useProxy, address)
 
-	err = s.OutToTCP(useProxy, address, &inConn)
+	err = s.OutToTCP(useProxy, address, &inConn, user, tag)
 	if err != nil {
 		if s.worker.HasUpstreams() {
-			log.Printf("connect to %s fail, ERR:%s", address, err)
-		} else {
 			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
+		} else {
+			log.Printf("connect to %s fail, ERR:%s", address, err)
 		}
+		s.worker.RemoveUserConnection(user)
 		utils.CloseConn(&inConn)
 	}
 }
 
-func (s *SOCKS) handleHandshake(inConn *net.Conn) error {
+func (s *SOCKS) handleHandshake(inConn *net.Conn) (string, utils.Tag, error) {
 	// Read version and number of auth methods
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(*inConn, header); err != nil {
-		return fmt.Errorf("failed to read header: %w", err)
+		return "", utils.Tag{}, fmt.Errorf("failed to read header: %w", err)
 	}
 
 	if header[0] != SOCKS5_VERSION {
-		return fmt.Errorf("unsupported SOCKS version: %d", header[0])
+		return "", utils.Tag{}, fmt.Errorf("unsupported SOCKS version: %d", header[0])
 	}
 
 	// Read auth methods
 	numMethods := int(header[1])
 	methods := make([]byte, numMethods)
 	if _, err := io.ReadFull(*inConn, methods); err != nil {
-		return fmt.Errorf("failed to read auth methods: %w", err)
+		return "", utils.Tag{}, fmt.Errorf("failed to read auth methods: %w", err)
 	}
 
 	// Require username/password auth
@@ -172,63 +190,85 @@ func (s *SOCKS) handleHandshake(inConn *net.Conn) error {
 	}
 	if !hasPasswordAuth {
 		(*inConn).Write([]byte{SOCKS5_VERSION, SOCKS5_AUTH_NO_ACCEPT})
-		return fmt.Errorf("client doesn't support password auth")
+		return "", utils.Tag{}, fmt.Errorf("client doesn't support password auth")
 	}
 
 	// Request password auth
 	(*inConn).Write([]byte{SOCKS5_VERSION, SOCKS5_AUTH_PASSWORD})
 
 	// Handle password auth
-	if err := s.handlePasswordAuth(inConn); err != nil {
-		return err
+	user, tag, err := s.handlePasswordAuth(inConn)
+	if err != nil {
+		return "", utils.Tag{}, err
 	}
 
-	return nil
+	return user, tag, nil
 }
 
-func (s *SOCKS) handlePasswordAuth(inConn *net.Conn) error {
+func (s *SOCKS) handlePasswordAuth(inConn *net.Conn) (string, utils.Tag, error) {
 	// Read auth version
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(*inConn, header); err != nil {
-		return fmt.Errorf("failed to read auth header: %w", err)
+		return "", utils.Tag{}, fmt.Errorf("failed to read auth header: %w", err)
 	}
 
 	// auth version should be 0x01
 	if header[0] != 0x01 {
-		return fmt.Errorf("unsupported auth version: %d", header[0])
+		return "", utils.Tag{}, fmt.Errorf("unsupported auth version: %d", header[0])
 	}
 
 	// Read username
 	usernameLen := int(header[1])
 	username := make([]byte, usernameLen)
 	if _, err := io.ReadFull(*inConn, username); err != nil {
-		return fmt.Errorf("failed to read username: %w", err)
+		return "", utils.Tag{}, fmt.Errorf("failed to read username: %w", err)
 	}
 
 	// Read password length
 	passLenByte := make([]byte, 1)
 	if _, err := io.ReadFull(*inConn, passLenByte); err != nil {
-		return fmt.Errorf("failed to read password length: %w", err)
+		return "", utils.Tag{}, fmt.Errorf("failed to read password length: %w", err)
 	}
 
 	// Read password
 	passwordLen := int(passLenByte[0])
 	password := make([]byte, passwordLen)
 	if _, err := io.ReadFull(*inConn, password); err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
+		return "", utils.Tag{}, fmt.Errorf("failed to read password: %w", err)
 	}
 
-	// Validate credentials
-	if !s.worker.VerifyUser(string(username), string(password)) {
+	// Parse routing tags from password (format: password-country-US-session-abc123)
+	passwordStr := string(password)
+	tagArray := strings.Split(passwordStr, "-")
+	tag := utils.Tag{}
+	for i, v := range tagArray {
+		if v == "country" && i+1 < len(tagArray) {
+			tag.Country = tagArray[i+1]
+		}
+		if v == "state" && i+1 < len(tagArray) {
+			tag.State = tagArray[i+1]
+		}
+		if v == "city" && i+1 < len(tagArray) {
+			tag.City = tagArray[i+1]
+		}
+		if v == "session" && i+1 < len(tagArray) {
+			tag.Session = tagArray[i+1]
+		}
+		if v == "lifetime" && i+1 < len(tagArray) {
+			tag.Lifetime, _ = strconv.Atoi(tagArray[i+1])
+		}
+	}
+
+	// Validate credentials (use first part of password before any tags)
+	actualPassword := tagArray[0]
+	if !s.worker.VerifyUser(string(username), actualPassword) {
 		(*inConn).Write([]byte{0x01, 0x01}) // Auth failed
-		return fmt.Errorf("authentication failed for user: %s", string(username))
+		return "", utils.Tag{}, fmt.Errorf("authentication failed for user: %s", string(username))
 	}
-
-	s.worker.VerifyUser(string(username), string(password))
 
 	log.Printf("socks5 auth success for user: %s", string(username))
 	(*inConn).Write([]byte{0x01, 0x00}) // Auth success
-	return nil
+	return string(username), tag, nil
 }
 
 func (s *SOCKS) handleRequest(inConn *net.Conn) (string, error) {
@@ -305,20 +345,45 @@ func (s *SOCKS) sendReply(inConn *net.Conn, rep byte) {
 	(*inConn).Write(reply)
 }
 
-func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn) (err error) {
+func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn, user string, tag utils.Tag) (err error) {
 	inAddr := (*inConn).RemoteAddr().String()
 	inLocalAddr := (*inConn).LocalAddr().String()
 
+	// Dead loop detection
+	if s.IsDeadLoop(inLocalAddr, address) {
+		utils.CloseConn(inConn)
+		err = fmt.Errorf("dead loop detected , %s", address)
+		return
+	}
+
 	var outConn net.Conn
-	var _outConn interface{}
+	var upstream *manager.Upstream
+
 	if useProxy {
-		_outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
-		if err == nil {
-			outConn = _outConn.(net.Conn)
+		if s.worker.HasUpstreams() {
+			upstream = s.worker.NextUpstream(user, tag.Session)
+			if upstream != nil {
+				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstream.GetAddress(), upstream.UpstreamTag)
+				connectStart := time.Now()
+				out, poolErr := s.outPool.GetConnFromConnectionPool(upstream.GetAddress())
+				if poolErr != nil {
+					outConn, err = utils.ConnectHost(upstream.GetAddress(), *s.cfg.Timeout)
+				} else {
+					log.Println("[Upstream] Using connection from pool")
+					outConn = out.(net.Conn)
+				}
+				connectLatency := time.Since(connectStart)
+				s.worker.RecordUpstreamLatency(upstream, connectLatency, err)
+			} else {
+				err = fmt.Errorf("no upstream available")
+			}
+		} else {
+			err = fmt.Errorf("no upstream configured")
 		}
 	} else {
 		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 	}
+
 	if err != nil {
 		s.sendReply(inConn, SOCKS5_REP_HOST_UNREACHABLE)
 		log.Printf("connect to %s , err:%s", address, err)
@@ -332,32 +397,42 @@ func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn) (err e
 	outAddr := outConn.RemoteAddr().String()
 	outLocalAddr := outConn.LocalAddr().String()
 
-	// Track connection in HealthCollector
-	if s.worker != nil && s.worker.HealthCollector != nil {
-		s.worker.HealthCollector.IncrementConnection()
+	// Data usage tracking
+	var bytesSent uint64
+	var bytesReceived uint64
+	sourceIP := strings.Split(inAddr, ":")[0]
+
+	// Parse destination host and port
+	destHost, destPortStr, parseErr := net.SplitHostPort(address)
+	if parseErr != nil {
+		destHost = address
+		destPortStr = "0"
 	}
+	var destPort uint16 = 0
+	if p, convErr := strconv.Atoi(destPortStr); convErr == nil {
+		destPort = uint16(p)
+	}
+
+	// Track connection
+	s.worker.IncrementConnection()
 
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, address)
 
-		// Decrement connection count
-		if s.worker != nil && s.worker.HealthCollector != nil {
-			s.worker.HealthCollector.DecrementConnection()
-			// Record success/error
-			if err != nil {
-				s.worker.HealthCollector.RecordError()
-			} else {
-				s.worker.HealthCollector.RecordSuccess()
-			}
-		}
+		// Decrement connection and record data usage
+		s.worker.DecrementConnection(err != nil)
+		s.worker.RecordDataUsage(bytesSent, bytesReceived, user, sourceIP, destHost, destPort, false)
+		s.worker.RemoveUserConnection(user)
 
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
-	}, func(n int, d bool) {
-		// Track throughput in HealthCollector
-		if s.worker != nil && s.worker.HealthCollector != nil {
-			s.worker.HealthCollector.AddThroughput(uint64(n))
+	}, func(n int, isDownload bool) {
+		if isDownload {
+			atomic.AddUint64(&bytesReceived, uint64(n))
+		} else {
+			atomic.AddUint64(&bytesSent, uint64(n))
 		}
+		s.worker.AddThroughput(uint64(n))
 	}, 0)
 	log.Printf("conn %s - %s - %s - %s connected [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, address)
 	return
@@ -369,14 +444,47 @@ func (s *SOCKS) InitOutConnPool() {
 			*s.cfg.CheckParentInterval,
 			*s.cfg.ParentType == TYPE_TLS,
 			s.cfg.CertBytes, s.cfg.KeyBytes,
-			"",
 			*s.cfg.Timeout,
 			*s.cfg.PoolSize,
 			*s.cfg.PoolSize*2,
+			s.worker.GetUpstreamAddress(),
 		)
 	}
 }
 
 func (s *SOCKS) IsBasicAuth() bool {
 	return *s.cfg.AuthFile != "" || len(*s.cfg.Auth) > 0
+}
+
+func (s *SOCKS) IsDeadLoop(inLocalAddr string, host string) bool {
+	inIP, inPort, err := net.SplitHostPort(inLocalAddr)
+	if err != nil {
+		return false
+	}
+	outDomain, outPort, err := net.SplitHostPort(host)
+	if err != nil {
+		return false
+	}
+	if inPort == outPort {
+		var outIPs []net.IP
+		outIPs, err = net.LookupIP(outDomain)
+		if err == nil {
+			for _, ip := range outIPs {
+				if ip.String() == inIP {
+					return true
+				}
+			}
+		}
+		interfaceIPs, err := utils.GetAllInterfaceAddr()
+		if err == nil {
+			for _, localIP := range interfaceIPs {
+				for _, outIP := range outIPs {
+					if localIP.Equal(outIP) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }

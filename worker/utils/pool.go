@@ -130,6 +130,7 @@ func (p *netPool) Put(conn interface{}) {
 		p.config.Release(conn)
 	}
 }
+
 func (p *netPool) ReleaseAll() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -138,8 +139,8 @@ func (p *netPool) ReleaseAll() {
 		p.config.Release(c)
 	}
 	p.conns = make(chan interface{}, p.config.InitialCap)
-
 }
+
 func (p *netPool) Len() (length int) {
 	return len(p.conns)
 }
