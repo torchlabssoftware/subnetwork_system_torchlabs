@@ -46,24 +46,6 @@ func (h *UserHandler) AdminRoutes() http.Handler {
 	return r
 }
 
-func (h *UserHandler) TestRoutes() http.Handler {
-	r := chi.NewRouter()
-	r.Post("/", h.createUser)
-	r.Get("/", h.getUsers)
-	r.Get("/{id}", h.getUserbyId)
-	r.Patch("/{id}", h.UpdateUserStatus)
-	r.Delete("/{id}", h.deleteUser)
-	r.Get("/{id}/data-usage", h.getDataUsage)
-	r.Get("/{id}/pools", h.getUserAllowPools)
-	r.Post("/{id}/pools", h.addUserAllowPool)
-	r.Delete("/{id}/pools", h.removeUserAllowPool)
-	r.Get("/{id}/ipwhitelist", h.getUserIpWhitelist)
-	r.Post("/{id}/ipwhitelist", h.addUserIpWhitelist)
-	r.Delete("/{id}/ipwhitelist", h.removeUserIpWhitelist)
-	r.Post("/generate", h.GenerateproxyString)
-	return r
-}
-
 func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
