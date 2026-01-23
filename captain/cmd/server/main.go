@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/torchlabssoftware/subnetwork_system/internal/config"
 	db "github.com/torchlabssoftware/subnetwork_system/internal/db"
 	"github.com/torchlabssoftware/subnetwork_system/internal/server"
@@ -15,6 +17,17 @@ import (
 )
 
 func main() {
+	appEnv := os.Getenv("APP_ENV")
+	log.Println("APP_ENV:", appEnv)
+
+	if strings.ToLower(appEnv) == "dev" || strings.ToLower(appEnv) == "" {
+		if err := godotenv.Load(".env.dev"); err != nil {
+			log.Println("Error in loading .env.dev file:", err)
+		}
+	} else {
+		log.Println("Running in production mode, using environment variables from Docker")
+	}
+
 	envConfig := config.Load()
 
 	pgConn, err := db.ConnectPostgres(envConfig.POSTGRES_URL)
