@@ -411,6 +411,10 @@ func (s *PoolServiceImpl) UpdatePool(ctx context.Context, tag string, req models
 }
 
 func (s *PoolServiceImpl) DeletePool(ctx context.Context, tag string) (int, string, error) {
+	pool, err := s.Queries.GetPoolByTagWithUpstreams(ctx, tag)
+	if err != nil {
+		return http.StatusInternalServerError, "Failed to delete pool", err
+	}
 	result, err := s.Queries.DeletePool(ctx, tag)
 	if err != nil {
 		return http.StatusInternalServerError, "Failed to delete pool", err
@@ -421,8 +425,10 @@ func (s *PoolServiceImpl) DeletePool(ctx context.Context, tag string) (int, stri
 		return http.StatusNotFound, "Nothing deleted", nil
 	}
 
-	pool, err := s.Queries.GetPoolByTagWithUpstreams(ctx, tag)
-	s.wsManager.NotifyPoolChange(pool[0].PoolID)
+	if s.wsManager != nil {
+		log.Println(pool[0].PoolID)
+		s.wsManager.NotifyPoolChange(pool[0].PoolID)
+	}
 	return http.StatusOK, "deleted", nil
 }
 
