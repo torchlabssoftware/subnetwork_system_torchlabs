@@ -85,6 +85,7 @@ type WorkerHealth struct {
 	WorkerID              uuid.UUID        `json:"worker_id"`
 	WorkerName            string           `json:"worker_name"`
 	Region                string           `json:"region"`
+	PoolTag               string           `json:"pool_tag"`
 	Status                string           `json:"status"`
 	CpuUsage              float32          `json:"cpu_usage"`
 	MemoryUsage           float32          `json:"memory_usage"`

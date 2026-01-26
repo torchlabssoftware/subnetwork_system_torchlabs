@@ -247,6 +247,7 @@ func (c *WorkerManager) SendHealthTelemetry() {
 		return
 	}
 	health := c.HealthCollector.BuildWorkerHealth()
+	health.PoolTag = c.Worker.Pool.PoolTag
 	event := Event{
 		Type:    "telemetry_health",
 		Payload: health,
