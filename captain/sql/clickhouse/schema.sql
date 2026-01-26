@@ -32,7 +32,6 @@ CREATE TABLE IF NOT EXISTS analytics.user_usage_hourly (
     bytes_sent AggregateFunction(sum, UInt64),
     bytes_received AggregateFunction(sum, UInt64),
     request_count AggregateFunction(count, UInt64),
-    unique_sessions AggregateFunction(uniq, String),
     unique_destinations AggregateFunction(uniq, String)
 ) ENGINE = AggregatingMergeTree()
 PARTITION BY toYYYYMM(date)
@@ -46,32 +45,47 @@ CREATE TABLE IF NOT EXISTS analytics.user_usage_daily (
     bytes_sent UInt64,
     bytes_received UInt64,
     request_count UInt64,
-    unique_sessions UInt64,
     unique_destinations UInt64
-) ENGINE = SummingMergeTree()
+) ENGINE = AggregatingMergeTree()
 PARTITION BY toYYYYMM(date)
 ORDER BY (user_id, date);
 
--- Pool performance metrics
-CREATE TABLE IF NOT EXISTS analytics.pool_performance (
+-- Worker health metrics
+CREATE TABLE IF NOT EXISTS analytics.worker_health (
     timestamp DateTime64(3) DEFAULT now64(3),
     date Date DEFAULT toDate(timestamp),
-    pool_id UUID,
-    pool_name String,
-    upstream_domain String,
+    worker_id UUID,
+    worker_name String,
     region String,
-    request_count UInt64,
-    success_count UInt64,
-    failed_count UInt64,
-    avg_response_time_ms Float32,
-    p95_response_time_ms Float32,
-    p99_response_time_ms Float32,
-    total_bytes UInt64,
-    unique_users_count UInt64
+    status String,
+    pool_tag String,
+    cpu_usage Float32,
+    memory_usage Float32,
+    active_connections UInt32,
+    total_connections UInt64,
+    bytes_throughput_per_sec UInt64,
+    upstream_health Map(String, Float32),
+    error_rate Float32,
+    last_heartbeat DateTime
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(date)
-ORDER BY (pool_id, date, timestamp)
-TTL date + INTERVAL 180 DAY;
+ORDER BY (worker_id, date, timestamp)
+TTL date + INTERVAL 60 DAY;
+
+-- Upstream Health metrics
+CREATE TABLE IF NOT EXISTS analytics.worker_upstream_health (
+    timestamp DateTime64(3) DEFAULT now64(3),
+    date Date DEFAULT toDate(timestamp),
+    worker_id UUID,
+    upstream_id UUID,
+    upstream_tag String,
+    status String,
+    latency Int64,
+    error_rate Float32
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(date)
+ORDER BY (worker_id, upstream_id, date, timestamp)
+TTL date + INTERVAL 60 DAY;
 
 -- Website access patterns
 CREATE TABLE IF NOT EXISTS analytics.website_access (
@@ -87,72 +101,11 @@ CREATE TABLE IF NOT EXISTS analytics.website_access (
     request_method String,
     status_code UInt16,
     content_type String,
-   
-  
     source_ip String
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(date)
 ORDER BY (domain, date, timestamp)
 TTL date + INTERVAL 30 DAY;
-
--- Worker health metrics
-CREATE TABLE IF NOT EXISTS analytics.worker_health (
-    timestamp DateTime64(3) DEFAULT now64(3),
-    date Date DEFAULT toDate(timestamp),
-    worker_id UUID,
-    worker_name String,
-    region String,
-    status String,
-    cpu_usage Float32,
-    memory_usage Float32,
-    active_connections UInt32,
-    total_connections UInt64,
-    bytes_throughput_per_sec UInt64,
-    upstream_health Map(String, Float32), -- Map of upstream domain to health score
-    error_rate Float32,
-    last_heartbeat DateTime
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(date)
-ORDER BY (worker_id, date, timestamp)
-TTL date + INTERVAL 60 DAY;
-
--- Detailed Upstream Health metrics
-CREATE TABLE IF NOT EXISTS analytics.worker_upstream_health (
-    timestamp DateTime64(3) DEFAULT now64(3),
-    date Date DEFAULT toDate(timestamp),
-    worker_id UUID,
-    upstream_id UUID,
-    upstream_tag String,
-    status String,
-    latency Int64,
-    error_rate Float32
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(date)
-ORDER BY (worker_id, upstream_id, date, timestamp)
-TTL date + INTERVAL 60 DAY;
-
--- User behavior analytics
-CREATE TABLE IF NOT EXISTS analytics.user_behavior (
-    timestamp DateTime64(3) DEFAULT now64(3),
-    date Date DEFAULT toDate(timestamp),
-    user_id UUID,
-    username String,
-  
-    session_start DateTime,
-    session_end DateTime,
-    total_requests UInt32,
-    total_bytes UInt64,
-    avg_requests_per_minute Float32,
-    peak_bandwidth_mbps Float32,
-    common_protocols Array(String),
-    top_domains Array(Tuple(String, UInt32)), -- (domain, count)
-    geolocation String,
-    is_bot Boolean DEFAULT 0,
-    user_category String -- casual, power, business, etc.
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(date)
-ORDER BY (user_id, date, timestamp)
-TTL date + INTERVAL 365 DAY;
 
 -- Create materialized view for hourly aggregation
 CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.user_usage_hourly_mv
@@ -166,7 +119,6 @@ SELECT
     sumState(bytes_sent) AS bytes_sent,
     sumState(bytes_received) AS bytes_received,
     countState() AS request_count,
-  
     uniqState(destination_host) AS unique_destinations
 FROM analytics.user_data_usage
 GROUP BY date, hour, user_id, username;
@@ -179,14 +131,10 @@ SELECT
     date,
     user_id,
     username,
-    sum(bytes_sent) AS bytes_sent,
-    sum(bytes_received) AS bytes_received,
-    count() AS request_count,
-  
-    uniq(destination_host) AS unique_destinations
+    sumState(bytes_sent) AS bytes_sent,
+    sumState(bytes_received) AS bytes_received,
+    countState() AS request_count,
+    uniqState(destination_host) AS unique_destinations
 FROM analytics.user_data_usage
 GROUP BY date, user_id, username;
 
--- Create user for analytics
-CREATE USER IF NOT EXISTS analytics IDENTIFIED WITH sha256_password BY 'analytics123';
-GRANT ALL ON analytics.* TO analytics;
