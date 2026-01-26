@@ -43,10 +43,10 @@ func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data models.W
 	// 1. Record Worker App Health
 	queryWorker := `
 		INSERT INTO analytics.worker_health (
-			worker_id, worker_name, region, status, cpu_usage, memory_usage,
+			worker_id, worker_name, region, pool_tag, status, cpu_usage, memory_usage,
 			active_connections, total_connections, bytes_throughput_per_sec, error_rate
 		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)
 	`
 	if err := s.conn.Exec(ctx, queryWorker,
