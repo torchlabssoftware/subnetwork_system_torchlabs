@@ -37,7 +37,7 @@ func TestE2E_GetWorkerHealth(t *testing.T) {
 	createResp.RequireStatus(t, http.StatusOK)
 	var worker models.AddWorkerResponse
 	createResp.ParseJSON(t, &worker)
-	resp := adminClient.Get(t, "/admin/analytics/worker/"+worker.ID+"/health?from=2024-01-01&to=2025-12-31")
+	resp := adminClient.Get(t, "/admin/analytics/worker/"+worker.ID+"/health?from=2026-01-01&to=2026-12-31")
 	resp.RequireStatus(t, http.StatusOK)
 	t.Logf("Worker health response: %s", resp.String())
 }

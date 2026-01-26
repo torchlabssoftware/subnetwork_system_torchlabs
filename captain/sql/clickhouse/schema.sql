@@ -42,10 +42,10 @@ CREATE TABLE IF NOT EXISTS analytics.user_usage_daily (
     date Date,
     user_id UUID,
     username String,
-    bytes_sent UInt64,
-    bytes_received UInt64,
-    request_count UInt64,
-    unique_destinations UInt64
+    bytes_sent AggregateFunction(sum, UInt64),
+    bytes_received AggregateFunction(sum, UInt64),
+    request_count AggregateFunction(count, UInt64),
+    unique_destinations AggregateFunction(uniq, String)
 ) ENGINE = AggregatingMergeTree()
 PARTITION BY toYYYYMM(date)
 ORDER BY (user_id, date);
@@ -65,8 +65,7 @@ CREATE TABLE IF NOT EXISTS analytics.worker_health (
     total_connections UInt64,
     bytes_throughput_per_sec UInt64,
     upstream_health Map(String, Float32),
-    error_rate Float32,
-    last_heartbeat DateTime
+    error_rate Float32
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(date)
 ORDER BY (worker_id, date, timestamp)

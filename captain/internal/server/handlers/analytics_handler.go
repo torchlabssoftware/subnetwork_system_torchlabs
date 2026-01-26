@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	"github.com/google/uuid"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
@@ -40,7 +41,12 @@ func (h *AnalyticsHandler) GetUserUsage(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		to = time.Now()
 	}
-	data, err := h.service.GetUserUsage(r.Context(), userID, from, to, granularity)
+	uuid, err := uuid.Parse(userID)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to parse user id", err)
+		return
+	}
+	data, err := h.service.GetUserUsage(r.Context(), uuid, from, to, granularity)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to get analytics data", err)
 		return
@@ -60,7 +66,12 @@ func (h *AnalyticsHandler) GetWorkerHealth(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		to = time.Now()
 	}
-	data, err := h.service.GetWorkerHealth(r.Context(), workerID, from, to)
+	uuid, err := uuid.Parse(workerID)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to parse worker id", err)
+		return
+	}
+	data, err := h.service.GetWorkerHealth(r.Context(), uuid, from, to)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to get worker health data", err)
 		return
@@ -81,7 +92,12 @@ func (h *AnalyticsHandler) GetUserWebsiteAccess(w http.ResponseWriter, r *http.R
 	if err != nil {
 		to = time.Now()
 	}
-	data, err := h.service.GetUserWebsiteAccess(r.Context(), userID, from, to)
+	uuid, err := uuid.Parse(userID)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to parse user id", err)
+		return
+	}
+	data, err := h.service.GetUserWebsiteAccess(r.Context(), uuid, from, to)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to get website access data", err)
 		return

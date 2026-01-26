@@ -71,7 +71,7 @@ func setup() error {
 		Auth: clickhouse.Auth{
 			Database: "analytics",
 			Username: "analytics",
-			Password: "analytics123",
+			Password: "analytics",
 		},
 		Debug: false,
 		// Debugf: func(format string, v ...interface{}) {
