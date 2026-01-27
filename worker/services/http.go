@@ -1,14 +1,10 @@
 package services
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -274,83 +270,4 @@ func (s *HTTP) IsDeadLoop(inLocalAddr string, host string) bool {
 		}
 	}
 	return false
-}
-
-func connectUpstream(req *utils.HTTPRequest, upstream *manager.Upstream, outConn *net.Conn) error {
-	httpReq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(req.HeadBuf)))
-	if err != nil {
-		utils.CloseConn(outConn)
-		return err
-	}
-	httpReq.Header.Del("Proxy-Authorization")
-	if upstream.UpstreamUsername != "" && upstream.UpstreamPassword != "" {
-		tag := convertTag(upstream.UpstreamUsername, upstream.UpstreamPassword, req.Tag, upstream.UpstreamProvider)
-		log.Printf("[Upstream] Using tag: %s", tag)
-		token := base64.StdEncoding.EncodeToString([]byte(tag))
-		httpReq.Header.Set("Proxy-Authorization", "Basic "+token)
-		log.Printf("[Upstream] Using credentials for user: %s", upstream.UpstreamUsername)
-	}
-	var buf bytes.Buffer
-	httpReq.WriteProxy(&buf)
-	(*outConn).Write(buf.Bytes())
-	return nil
-}
-
-func convertTag(username, password string, tag utils.Tag, upstream string) string {
-	newstring := ""
-	switch upstream {
-	case "netnut":
-		newstring += username
-		if tag.Country != "" && (tag.City != "" || tag.State != "") {
-			newstring += "-res_sc-" + tag.Country
-			if tag.State != "" {
-				newstring += "_" + tag.State
-			}
-			if tag.City != "" {
-				newstring += "_" + tag.City
-			}
-		} else {
-			newstring += "-res-" + tag.Country
-		}
-		if tag.Session != "" {
-			newstring += "-sid-" + tag.Session
-		}
-		newstring += ":" + password
-	case "geonode":
-		newstring += username
-		if tag.Country != "" {
-			newstring += "-country-" + tag.Country
-		}
-		/*if tag.State != "" {
-			newstring += "_" + tag.State
-		}*/
-		if tag.City != "" {
-			newstring += "-city-" + tag.City
-		}
-		if tag.Session != "" {
-			newstring += "-session-" + tag.Session
-		}
-		if tag.Lifetime > 0 {
-			newstring += "-lifetime-" + strconv.Itoa(tag.Lifetime)
-		}
-		newstring += ":" + password
-	case "iproyal":
-		newstring += username + ":" + password
-		if tag.Country != "" {
-			newstring += "_country-" + tag.Country
-		}
-		/*if tag.State != "" {
-			newstring += "_" + tag.State
-		}*/
-		if tag.City != "" {
-			newstring += "_city-" + tag.City
-		}
-		if tag.Session != "" {
-			newstring += "_session-" + tag.Session
-		}
-		if tag.Lifetime > 0 {
-			newstring += "_lifetime-" + strconv.Itoa(tag.Lifetime) + "m"
-		}
-	}
-	return newstring
 }
