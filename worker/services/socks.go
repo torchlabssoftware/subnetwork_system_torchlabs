@@ -81,11 +81,6 @@ func (s *SOCKS) Start(args interface{}, worker *manager.WorkerManager) (err erro
 	s.cfg = args.(SOCKSArgs)
 	s.worker = worker
 
-	/*if *s.cfg.Parent != "" {
-		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
-		s.InitOutConnPool()
-	}*/
-
 	s.InitService()
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
@@ -121,7 +116,6 @@ func (s *SOCKS) callback(inConn net.Conn) {
 		return
 	}
 
-	// Check user connection limits
 	if err := s.worker.AddUserConnection(user); err != nil {
 		log.Printf("add user connection failed, err: %s", err)
 		s.sendReply(&inConn, SOCKS5_REP_CONN_NOT_ALLOWED)
@@ -129,8 +123,7 @@ func (s *SOCKS) callback(inConn net.Conn) {
 		return
 	}
 
-	// Handle SOCKS5 request
-	address, err := s.handleRequest(&inConn)
+	address, cmd, err := s.handleRequest(&inConn)
 	if err != nil {
 		log.Printf("socks5 request error from %s: %s", inConn.RemoteAddr(), err)
 		s.worker.RemoveUserConnection(user)
@@ -138,7 +131,17 @@ func (s *SOCKS) callback(inConn net.Conn) {
 		return
 	}
 
-	// Determine if we should use upstream proxy (FIXED: logic was inverted)
+	if cmd == SOCKS5_CMD_UDP {
+		err = s.handleUDP(&inConn, address)
+		if err != nil {
+			log.Printf("socks5 udp error from %s: %s", inConn.RemoteAddr(), err)
+		}
+		s.worker.RemoveUserConnection(user)
+		utils.CloseConn(&inConn)
+		return
+	}
+
+	// Determine if we should use upstream proxy
 	useProxy := false
 	if s.worker.HasUpstreams() {
 		if *s.cfg.Always {
@@ -162,8 +165,133 @@ func (s *SOCKS) callback(inConn net.Conn) {
 	}
 }
 
+func (s *SOCKS) handleUDP(inConn *net.Conn, clientAddr string) error {
+	udpAddr, err := net.ResolveUDPAddr("udp", ":0")
+	if err != nil {
+		return fmt.Errorf("failed to resolve udp addr: %w", err)
+	}
+	udpConn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen udp: %w", err)
+	}
+	defer udpConn.Close()
+
+	localAddr := (*inConn).LocalAddr().(*net.TCPAddr)
+	bindPort := udpConn.LocalAddr().(*net.UDPAddr).Port
+
+	// Create reply
+	reply := []byte{SOCKS5_VERSION, SOCKS5_REP_SUCCESS, 0x00, SOCKS5_ATYP_IPV4}
+	reply = append(reply, localAddr.IP.To4()...)
+	portBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(portBytes, uint16(bindPort))
+	reply = append(reply, portBytes...)
+
+	if _, err := (*inConn).Write(reply); err != nil {
+		return fmt.Errorf("failed to write reply: %w", err)
+	}
+
+	// Keep TCP open
+	go func() {
+		io.Copy(io.Discard, *inConn)
+		udpConn.Close()
+	}()
+
+	buf := make([]byte, 65535)
+	for {
+		n, clientAddr, err := udpConn.ReadFromUDP(buf)
+		if err != nil {
+			return nil // Connection closed
+		}
+
+		// Handle SOCKS5 UDP header
+		// RSV(2) FRAG(1) ATYP(1) DST.ADDR DST.PORT DATA
+		if n < 10 {
+			continue
+		}
+
+		// Simple implementation: extract destination and forward
+		// Current implementation doesn't support fragmentation (FRAG=0)
+		frag := buf[2]
+		if frag != 0 {
+			continue
+		}
+
+		var targetHost string
+		var targetPort int
+		var headerLen int
+
+		atyp := buf[3]
+		switch atyp {
+		case SOCKS5_ATYP_IPV4:
+			targetHost = net.IP(buf[4:8]).String()
+			targetPort = int(binary.BigEndian.Uint16(buf[8:10]))
+			headerLen = 10
+		case SOCKS5_ATYP_DOMAIN:
+			domainLen := int(buf[4])
+			targetHost = string(buf[5 : 5+domainLen])
+			targetPort = int(binary.BigEndian.Uint16(buf[5+domainLen : 5+domainLen+2]))
+			headerLen = 5 + domainLen + 2
+		case SOCKS5_ATYP_IPV6:
+			targetHost = net.IP(buf[4:20]).String()
+			targetPort = int(binary.BigEndian.Uint16(buf[20:22]))
+			headerLen = 22
+		default:
+			continue
+		}
+
+		targetAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", targetHost, targetPort))
+		if err != nil {
+			continue
+		}
+
+		// Forward to target
+		payload := buf[headerLen:n]
+
+		go func(data []byte, tAddr *net.UDPAddr, cAddr *net.UDPAddr, header []byte) {
+			// Send to target
+			conn, err := net.DialUDP("udp", nil, tAddr)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			_, err = conn.Write(data)
+			if err != nil {
+				return
+			}
+
+			// Wait for response
+			respBuf := make([]byte, 65535)
+			conn.SetReadDeadline(time.Now().Add(time.Second * 30))
+			rn, _, err := conn.ReadFromUDP(respBuf)
+			if err != nil {
+				return
+			}
+
+			respHeader := make([]byte, 0, 22)
+			respHeader = append(respHeader, 0, 0, 0) // RSV, FRAG
+
+			if ip4 := tAddr.IP.To4(); ip4 != nil {
+				respHeader = append(respHeader, SOCKS5_ATYP_IPV4)
+				respHeader = append(respHeader, ip4...)
+			} else {
+				respHeader = append(respHeader, SOCKS5_ATYP_IPV6)
+				respHeader = append(respHeader, tAddr.IP.To16()...)
+			}
+
+			pBytes := make([]byte, 2)
+			binary.BigEndian.PutUint16(pBytes, uint16(tAddr.Port))
+			respHeader = append(respHeader, pBytes...)
+
+			finalPacket := append(respHeader, respBuf[:rn]...)
+			udpConn.WriteToUDP(finalPacket, cAddr)
+
+		}(payload, targetAddr, clientAddr, buf[:headerLen])
+	}
+	return nil
+}
+
 func (s *SOCKS) handleHandshake(inConn *net.Conn) (string, utils.Tag, error) {
-	// Read version and number of auth methods
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(*inConn, header); err != nil {
 		return "", utils.Tag{}, fmt.Errorf("failed to read header: %w", err)
@@ -173,14 +301,12 @@ func (s *SOCKS) handleHandshake(inConn *net.Conn) (string, utils.Tag, error) {
 		return "", utils.Tag{}, fmt.Errorf("unsupported SOCKS version: %d", header[0])
 	}
 
-	// Read auth methods
 	numMethods := int(header[1])
 	methods := make([]byte, numMethods)
 	if _, err := io.ReadFull(*inConn, methods); err != nil {
 		return "", utils.Tag{}, fmt.Errorf("failed to read auth methods: %w", err)
 	}
 
-	// Require username/password auth
 	hasPasswordAuth := false
 	for _, m := range methods {
 		if m == SOCKS5_AUTH_PASSWORD {
@@ -193,10 +319,8 @@ func (s *SOCKS) handleHandshake(inConn *net.Conn) (string, utils.Tag, error) {
 		return "", utils.Tag{}, fmt.Errorf("client doesn't support password auth")
 	}
 
-	// Request password auth
 	(*inConn).Write([]byte{SOCKS5_VERSION, SOCKS5_AUTH_PASSWORD})
 
-	// Handle password auth
 	user, tag, err := s.handlePasswordAuth(inConn)
 	if err != nil {
 		return "", utils.Tag{}, err
@@ -206,38 +330,32 @@ func (s *SOCKS) handleHandshake(inConn *net.Conn) (string, utils.Tag, error) {
 }
 
 func (s *SOCKS) handlePasswordAuth(inConn *net.Conn) (string, utils.Tag, error) {
-	// Read auth version
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(*inConn, header); err != nil {
 		return "", utils.Tag{}, fmt.Errorf("failed to read auth header: %w", err)
 	}
 
-	// auth version should be 0x01
 	if header[0] != 0x01 {
 		return "", utils.Tag{}, fmt.Errorf("unsupported auth version: %d", header[0])
 	}
 
-	// Read username
 	usernameLen := int(header[1])
 	username := make([]byte, usernameLen)
 	if _, err := io.ReadFull(*inConn, username); err != nil {
 		return "", utils.Tag{}, fmt.Errorf("failed to read username: %w", err)
 	}
 
-	// Read password length
 	passLenByte := make([]byte, 1)
 	if _, err := io.ReadFull(*inConn, passLenByte); err != nil {
 		return "", utils.Tag{}, fmt.Errorf("failed to read password length: %w", err)
 	}
 
-	// Read password
 	passwordLen := int(passLenByte[0])
 	password := make([]byte, passwordLen)
 	if _, err := io.ReadFull(*inConn, password); err != nil {
 		return "", utils.Tag{}, fmt.Errorf("failed to read password: %w", err)
 	}
 
-	// Parse routing tags from password (format: password-country-US-session-abc123)
 	passwordStr := string(password)
 	tagArray := strings.Split(passwordStr, "-")
 	tag := utils.Tag{}
@@ -259,88 +377,81 @@ func (s *SOCKS) handlePasswordAuth(inConn *net.Conn) (string, utils.Tag, error) 
 		}
 	}
 
-	// Validate credentials (use first part of password before any tags)
 	actualPassword := tagArray[0]
 	if !s.worker.VerifyUser(string(username), actualPassword) {
-		(*inConn).Write([]byte{0x01, 0x01}) // Auth failed
+		(*inConn).Write([]byte{0x01, 0x01})
 		return "", utils.Tag{}, fmt.Errorf("authentication failed for user: %s", string(username))
 	}
 
 	log.Printf("socks5 auth success for user: %s", string(username))
-	(*inConn).Write([]byte{0x01, 0x00}) // Auth success
+	(*inConn).Write([]byte{0x01, 0x00})
 	return string(username), tag, nil
 }
 
-func (s *SOCKS) handleRequest(inConn *net.Conn) (string, error) {
-	// Read request header: VER, CMD, RSV, ATYP
+func (s *SOCKS) handleRequest(inConn *net.Conn) (string, byte, error) {
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(*inConn, header); err != nil {
-		return "", fmt.Errorf("failed to read request header: %w", err)
+		return "", 0, fmt.Errorf("failed to read request header: %w", err)
 	}
 
 	if header[0] != SOCKS5_VERSION {
-		return "", fmt.Errorf("unsupported SOCKS version: %d", header[0])
+		return "", 0, fmt.Errorf("unsupported SOCKS version: %d", header[0])
 	}
 
 	cmd := header[1]
 	atyp := header[3]
 
-	// Only support CONNECT command
-	if cmd != SOCKS5_CMD_CONNECT {
+	if cmd != SOCKS5_CMD_CONNECT && cmd != SOCKS5_CMD_UDP {
 		s.sendReply(inConn, SOCKS5_REP_CMD_NOT_SUPPORTED)
-		return "", fmt.Errorf("unsupported command: %d", cmd)
+		return "", 0, fmt.Errorf("unsupported command: %d", cmd)
 	}
 
-	// Parse destination address
 	var host string
 	switch atyp {
 	case SOCKS5_ATYP_IPV4:
 		addr := make([]byte, 4)
 		if _, err := io.ReadFull(*inConn, addr); err != nil {
-			return "", fmt.Errorf("failed to read IPv4 address: %w", err)
+			return "", 0, fmt.Errorf("failed to read IPv4 address: %w", err)
 		}
 		host = net.IP(addr).String()
 
 	case SOCKS5_ATYP_DOMAIN:
-		// Read domain length
 		lenByte := make([]byte, 1)
 		if _, err := io.ReadFull(*inConn, lenByte); err != nil {
-			return "", fmt.Errorf("failed to read domain length: %w", err)
+			return "", 0, fmt.Errorf("failed to read domain length: %w", err)
 		}
 		domainLen := int(lenByte[0])
 		domain := make([]byte, domainLen)
 		if _, err := io.ReadFull(*inConn, domain); err != nil {
-			return "", fmt.Errorf("failed to read domain: %w", err)
+			return "", 0, fmt.Errorf("failed to read domain: %w", err)
 		}
 		host = string(domain)
 
 	case SOCKS5_ATYP_IPV6:
 		addr := make([]byte, 16)
 		if _, err := io.ReadFull(*inConn, addr); err != nil {
-			return "", fmt.Errorf("failed to read IPv6 address: %w", err)
+			return "", 0, fmt.Errorf("failed to read IPv6 address: %w", err)
 		}
 		host = net.IP(addr).String()
 
 	default:
 		s.sendReply(inConn, SOCKS5_REP_ATYP_NOT_SUPPORTED)
-		return "", fmt.Errorf("unsupported address type: %d", atyp)
+		return "", 0, fmt.Errorf("unsupported address type: %d", atyp)
 	}
 
-	// Read port
 	portBytes := make([]byte, 2)
 	if _, err := io.ReadFull(*inConn, portBytes); err != nil {
-		return "", fmt.Errorf("failed to read port: %w", err)
+		return "", 0, fmt.Errorf("failed to read port: %w", err)
 	}
 	port := binary.BigEndian.Uint16(portBytes)
 
 	address := fmt.Sprintf("%s:%d", host, port)
-	log.Printf("SOCKS5 CONNECT: %s", address)
+	log.Printf("SOCKS5 Request: %s (CMD: %d)", address, cmd)
 
-	return address, nil
+	return address, cmd, nil
 }
 
 func (s *SOCKS) sendReply(inConn *net.Conn, rep byte) {
-	// Send reply: VER, REP, RSV, ATYP, BND.ADDR, BND.PORT
 	reply := []byte{SOCKS5_VERSION, rep, 0x00, SOCKS5_ATYP_IPV4, 0, 0, 0, 0, 0, 0}
 	(*inConn).Write(reply)
 }
@@ -349,7 +460,6 @@ func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn, user s
 	inAddr := (*inConn).RemoteAddr().String()
 	inLocalAddr := (*inConn).LocalAddr().String()
 
-	// Dead loop detection
 	if s.IsDeadLoop(inLocalAddr, address) {
 		utils.CloseConn(inConn)
 		err = fmt.Errorf("dead loop detected , %s", address)
@@ -388,21 +498,27 @@ func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn, user s
 		s.sendReply(inConn, SOCKS5_REP_HOST_UNREACHABLE)
 		log.Printf("connect to %s , err:%s", address, err)
 		utils.CloseConn(inConn)
-		return
+		return err
 	}
 
-	// Send success reply
 	s.sendReply(inConn, SOCKS5_REP_SUCCESS)
 
 	outAddr := outConn.RemoteAddr().String()
 	outLocalAddr := outConn.LocalAddr().String()
 
-	// Data usage tracking
+	if useProxy {
+		err = connectUpstreamSocks(tag, upstream, &outConn, address)
+		if err != nil {
+			utils.CloseConn(inConn)
+			utils.CloseConn(&outConn)
+			return err
+		}
+	}
+
 	var bytesSent uint64
 	var bytesReceived uint64
 	sourceIP := strings.Split(inAddr, ":")[0]
 
-	// Parse destination host and port
 	destHost, destPortStr, parseErr := net.SplitHostPort(address)
 	if parseErr != nil {
 		destHost = address
@@ -412,18 +528,13 @@ func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn, user s
 	if p, convErr := strconv.Atoi(destPortStr); convErr == nil {
 		destPort = uint16(p)
 	}
-
-	// Track connection
 	s.worker.IncrementConnection()
 
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, address)
-
-		// Decrement connection and record data usage
 		s.worker.DecrementConnection(err != nil)
 		s.worker.RecordDataUsage(bytesSent, bytesReceived, user, sourceIP, destHost, destPort, false)
 		s.worker.RemoveUserConnection(user)
-
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
 	}, func(n int, isDownload bool) {
@@ -450,10 +561,6 @@ func (s *SOCKS) InitOutConnPool() {
 			s.worker.GetUpstreamAddress(),
 		)
 	}
-}
-
-func (s *SOCKS) IsBasicAuth() bool {
-	return *s.cfg.AuthFile != "" || len(*s.cfg.Auth) > 0
 }
 
 func (s *SOCKS) IsDeadLoop(inLocalAddr string, host string) bool {

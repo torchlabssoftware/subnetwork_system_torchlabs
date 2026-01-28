@@ -482,17 +482,6 @@ func NewOutPool(dur int, isTLS bool, certBytes, keyBytes []byte, timeout int, In
 	for _, address := range upstreamAddress {
 		pool, e := NewConnPool(poolConfig{
 			IsActive: func(conn interface{}) bool {
-				if conn == nil {
-					return false
-				}
-				c := conn.(net.Conn)
-				c.SetReadDeadline(time.Now().Add(time.Millisecond))
-				one := make([]byte, 1)
-				_, err := c.Read(one)
-				c.SetReadDeadline(time.Time{})
-				if err == io.EOF {
-					return false
-				}
 				return true
 			},
 			Release: func(conn interface{}) {

@@ -85,14 +85,15 @@ func connectUpstream(req *utils.HTTPRequest, upstream *manager.Upstream, outConn
 func connectUpstreamSocks(tag utils.Tag, upstream *manager.Upstream, outConn *net.Conn, address string) error {
 	_, err := (*outConn).Write([]byte{SOCKS5_VERSION, 0x01, SOCKS5_AUTH_PASSWORD})
 	if err != nil {
+		log.Printf("[Upstream] Failed to send auth request: %s", err)
 		return err
 	}
 
-	//reply := make([]byte, 1000)
-	reply, err := io.ReadAll(*outConn) // err != nil {
-	//return err
-	//}
-	log.Printf("[Upstream] Auth reply: %v", string(reply))
+	reply := make([]byte, 2)
+	if _, err = io.ReadFull(*outConn, reply); err != nil {
+		log.Printf("[Upstream] Failed to read auth reply: %s", err)
+		return err
+	}
 	if reply[1] != 0x02 {
 		return fmt.Errorf("upstream does not accept username/password auth")
 	}
@@ -127,15 +128,23 @@ func connectUpstreamSocks(tag utils.Tag, upstream *manager.Upstream, outConn *ne
 		0x00,
 	}
 
-	ip := net.ParseIP(host)
-	if ip4 := ip.To4(); ip4 != nil {
-		req = append(req, 0x01)
-		req = append(req, ip4...)
-	} else {
-		req = append(req, 0x03)
-		req = append(req, byte(len(host)))
-		req = append(req, []byte(host)...)
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return err
 	}
+	var ip4 net.IP
+	for _, ip := range ips {
+		if v4 := ip.To4(); v4 != nil {
+			ip4 = v4
+			break
+		}
+	}
+	if ip4 == nil {
+		return fmt.Errorf("no IPv4 address found")
+	}
+
+	req = append(req, 0x01) // IPv4
+	req = append(req, ip4...)
 
 	req = append(req, byte(port>>8), byte(port))
 
