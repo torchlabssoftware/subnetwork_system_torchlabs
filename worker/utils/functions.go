@@ -361,3 +361,7 @@ func ReadUDPPacket(conn *net.Conn) (srcAddr string, packet []byte, err error) {
 // 	}
 // 	return
 // }
+
+func GetPTR[T any](v T) *T {
+	return &v
+}
