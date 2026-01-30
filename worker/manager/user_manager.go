@@ -40,7 +40,7 @@ func NewUserManager() *UserManager {
 		cachedUsers: util.NewConcurrentMap(),
 		TTL:         1 * time.Hour,
 	}
-	go userManager.cleanupLoop()
+	go userManager.cleanupLoop(1 * time.Hour)
 	go userManager.resetConnectionCount()
 	return userManager
 }
@@ -68,8 +68,8 @@ func (u *UserManager) RemoveUser(username string) {
 	u.cachedUsers.Remove(username)
 }
 
-func (u *UserManager) cleanupLoop() {
-	ticker := time.NewTicker(24 * time.Hour)
+func (u *UserManager) cleanupLoop(t time.Duration) {
+	ticker := time.NewTicker(t)
 	defer ticker.Stop()
 	for range ticker.C {
 		for item := range u.cachedUsers.IterBuffered() {

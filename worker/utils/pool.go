@@ -13,6 +13,7 @@ type ConnPool interface {
 	ReleaseAll()
 	Len() (length int)
 }
+
 type poolConfig struct {
 	Factory    func() (interface{}, error)
 	IsActive   func(interface{}) bool
