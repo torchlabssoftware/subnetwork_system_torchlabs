@@ -9,13 +9,13 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
-func ConnectClickHouse(url string) (driver.Conn, error) {
+func ConnectClickHouse(url string, database string, user string, password string) (driver.Conn, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{url},
 		Auth: clickhouse.Auth{
-			Database: "analytics",
-			Username: "analytics",
-			Password: "analytics123",
+			Database: database,
+			Username: user,
+			Password: password,
 		},
 		Debug: false,
 		// Debugf: func(format string, v ...interface{}) {

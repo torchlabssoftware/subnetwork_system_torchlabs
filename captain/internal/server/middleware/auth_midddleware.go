@@ -31,7 +31,7 @@ func AdminAuthentication(next http.Handler) http.Handler {
 
 		key := parts[1]
 		if key != adminKey {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			http.Error(w, "forbidden", http.StatusUnauthorized)
 			return
 		}
 
@@ -61,7 +61,7 @@ func WorkerAuthentication(next http.Handler) http.Handler {
 
 		key := parts[1]
 		if key != workerKey {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			http.Error(w, "forbidden", http.StatusUnauthorized)
 			return
 		}
 

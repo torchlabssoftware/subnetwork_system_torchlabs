@@ -11,12 +11,12 @@ type Event struct {
 
 type EventHandler func(event Event, w *Worker) error
 
-type loginPayload struct {
+type LoginPayload struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-type replyPayload struct {
+type ReplyPayload struct {
 	Success bool        `json:"success"`
 	Payload interface{} `json:"payload"`
 }

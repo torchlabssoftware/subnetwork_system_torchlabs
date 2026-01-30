@@ -35,6 +35,7 @@ type WorkerHealth struct {
 	WorkerID              uuid.UUID        `json:"worker_id"`
 	WorkerName            string           `json:"worker_name"`
 	Region                string           `json:"region"`
+	PoolTag               string           `json:"pool_tag"`
 	Status                string           `json:"status"`
 	CpuUsage              float32          `json:"cpu_usage"`
 	MemoryUsage           float32          `json:"memory_usage"`
@@ -76,8 +77,8 @@ type AnalyticsService interface {
 	RecordUserDataUsage(ctx context.Context, data UserDataUsage) error
 	RecordWorkerHealth(ctx context.Context, data WorkerHealth) error
 	RecordWebsiteAccess(ctx context.Context, data WebsiteAccess) error
-	GetUserUsage(ctx context.Context, userID string, from, to time.Time, granularity string) (interface{}, error)
-	GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]WorkerHealth, error)
-	GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]WebsiteAccess, error)
+	GetUserUsage(ctx context.Context, userID uuid.UUID, from, to time.Time, granularity string) (interface{}, error)
+	GetWorkerHealth(ctx context.Context, workerID uuid.UUID, from, to time.Time) ([]WorkerHealth, error)
+	GetUserWebsiteAccess(ctx context.Context, userID uuid.UUID, from, to time.Time) ([]WebsiteAccess, error)
 	StartWorkers()
 }

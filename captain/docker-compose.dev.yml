@@ -23,9 +23,13 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./sql/seed:/docker-entrypoint-initdb.d
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: subnetwork_system_clickhouse
+    environment:
+      CLICKHOUSE_USER: 'analytics'
+      CLICKHOUSE_PASSWORD: 'analytics'
     ports:
       - "8123:8123"
       - "9000:9000"

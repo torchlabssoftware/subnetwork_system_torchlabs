@@ -115,7 +115,7 @@ func (ws *WebsocketManager) RemoveWorker(w *Worker) {
 }
 
 func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
-	var payload loginPayload
+	var payload LoginPayload
 	data, err := json.Marshal(event.Payload)
 	if err != nil {
 		return fmt.Errorf("could not marshal payload map: %v", err)
@@ -140,7 +140,7 @@ func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
 	}
 	w.egress <- Event{
 		Type:    "login_success",
-		Payload: replyPayload{Success: true, Payload: successPayload},
+		Payload: ReplyPayload{Success: true, Payload: successPayload},
 	}
 	return nil
 }
@@ -217,7 +217,7 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 	}
 	w.egress <- Event{
 		Type:    "config",
-		Payload: replyPayload{Success: true, Payload: config},
+		Payload: ReplyPayload{Success: true, Payload: config},
 	}
 	return nil
 }
@@ -236,7 +236,7 @@ func (ws *WebsocketManager) NotifyUserChange(username string) {
 	for _, worker := range ws.Workers {
 		worker.egress <- Event{
 			Type:    "user_change",
-			Payload: replyPayload{Success: true, Payload: username},
+			Payload: ReplyPayload{Success: true, Payload: username},
 		}
 	}
 }
@@ -248,7 +248,7 @@ func (ws *WebsocketManager) NotifyPoolChange(poolId uuid.UUID) {
 		if worker.PoolId == poolId {
 			worker.egress <- Event{
 				Type:    "pool_change",
-				Payload: replyPayload{Success: true, Payload: poolId},
+				Payload: ReplyPayload{Success: true, Payload: poolId},
 			}
 		}
 	}

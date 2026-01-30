@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/google/uuid"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
@@ -25,44 +26,49 @@ func NewAnalyticsService(conn driver.Conn) models.AnalyticsService {
 }
 
 func (s *analyticsService) RecordUserDataUsage(ctx context.Context, data models.UserDataUsage) error {
-	// Validate SourceIP
 	if data.SourceIP == "" {
 		data.SourceIP = "0.0.0.0"
 	}
-
 	select {
 	case s.userDataChan <- data:
 		return nil
 	default:
-		// Drop event if buffer is full
 		return fmt.Errorf("analytics buffer full, dropping user data event")
 	}
 }
 
+func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data models.WebsiteAccess) error {
+	if data.SourceIP == "" {
+		data.SourceIP = "0.0.0.0"
+	}
+	select {
+	case s.websiteAccessChan <- data:
+		return nil
+	default:
+		return fmt.Errorf("analytics buffer full, dropping website access event")
+	}
+}
+
 func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data models.WorkerHealth) error {
-	// 1. Record Worker App Health
 	queryWorker := `
 		INSERT INTO analytics.worker_health (
-			worker_id, worker_name, region, status, cpu_usage, memory_usage,
+			worker_id, worker_name, region, pool_tag, status, cpu_usage, memory_usage,
 			active_connections, total_connections, bytes_throughput_per_sec, error_rate
 		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)
 	`
 	if err := s.conn.Exec(ctx, queryWorker,
-		data.WorkerID, data.WorkerName, data.Region, data.Status, data.CpuUsage, data.MemoryUsage,
+		data.WorkerID, data.WorkerName, data.Region, data.PoolTag, data.Status, data.CpuUsage, data.MemoryUsage,
 		data.ActiveConnections, data.TotalConnections, data.BytesThroughputPerSec, data.ErrorRate,
 	); err != nil {
 		return fmt.Errorf("failed to insert worker health: %w", err)
 	}
-
-	// 2. Record Upstream Health
 	if len(data.Upstreams) > 0 {
 		batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO analytics.worker_upstream_health (worker_id, upstream_id, upstream_tag, status, latency, error_rate)")
 		if err != nil {
 			return fmt.Errorf("failed to prepare batch for upstreams: %w", err)
 		}
-
 		for _, u := range data.Upstreams {
 			if err := batch.Append(
 				data.WorkerID,
@@ -75,30 +81,14 @@ func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data models.W
 				return fmt.Errorf("failed to append upstream health to batch: %w", err)
 			}
 		}
-
 		if err := batch.Send(); err != nil {
 			return fmt.Errorf("failed to send upstream health batch: %w", err)
 		}
 	}
-
 	return nil
 }
 
-func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data models.WebsiteAccess) error {
-	// Validate SourceIP
-	if data.SourceIP == "" {
-		data.SourceIP = "0.0.0.0"
-	}
-
-	select {
-	case s.websiteAccessChan <- data:
-		return nil
-	default:
-		return fmt.Errorf("analytics buffer full, dropping website access event")
-	}
-}
-
-func (s *analyticsService) GetUserUsage(ctx context.Context, userID string, from, to time.Time, granularity string) (interface{}, error) {
+func (s *analyticsService) GetUserUsage(ctx context.Context, userID uuid.UUID, from, to time.Time, granularity string) (interface{}, error) {
 	if granularity == "hour" {
 		query := `
 			SELECT 
@@ -106,7 +96,6 @@ func (s *analyticsService) GetUserUsage(ctx context.Context, userID string, from
 				sumMerge(bytes_sent) as bytes_sent,
 				sumMerge(bytes_received) as bytes_received,
 				countMerge(request_count) as request_count,
-				uniqMerge(unique_sessions) as unique_sessions,
 				uniqMerge(unique_destinations) as unique_destinations
 			FROM analytics.user_usage_hourly
 			WHERE user_id = ? AND date >= ? AND date <= ?
@@ -122,7 +111,7 @@ func (s *analyticsService) GetUserUsage(ctx context.Context, userID string, from
 	return nil, fmt.Errorf("unsupported granularity: %s", granularity)
 }
 
-func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]models.WorkerHealth, error) {
+func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID uuid.UUID, from, to time.Time) ([]models.WorkerHealth, error) {
 	query := `
 		SELECT 
 			worker_id, worker_name, region, status, cpu_usage, memory_usage,
@@ -139,7 +128,7 @@ func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID string,
 	return results, nil
 }
 
-func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]models.WebsiteAccess, error) {
+func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID uuid.UUID, from, to time.Time) ([]models.WebsiteAccess, error) {
 	query := `
 		SELECT
 			user_id, username, domain, subdomain, full_url,
@@ -165,11 +154,9 @@ func (s *analyticsService) StartWorkers() {
 func (s *analyticsService) processUserDataBatch() {
 	batchSize := 1000
 	flushInterval := 5 * time.Second
-
 	batch := make([]models.UserDataUsage, 0, batchSize)
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case item := <-s.userDataChan:
@@ -191,7 +178,6 @@ func (s *analyticsService) flushUserData(items []models.UserDataUsage) {
 	if len(items) == 0 {
 		return
 	}
-
 	ctx := context.Background()
 	query := `INSERT INTO analytics.user_data_usage (
 			user_id, username, pool_id, pool_name, worker_id, worker_region,
@@ -200,13 +186,11 @@ func (s *analyticsService) flushUserData(items []models.UserDataUsage) {
 		) VALUES (
 			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)`
-
 	batch, err := s.conn.PrepareBatch(ctx, query)
 	if err != nil {
 		log.Printf("Failed to prepare user data batch: %v", err)
 		return
 	}
-
 	for _, data := range items {
 		err := batch.Append(
 			data.UserID, data.Username, data.PoolID, data.PoolName, data.WorkerID, data.WorkerRegion,
@@ -218,7 +202,6 @@ func (s *analyticsService) flushUserData(items []models.UserDataUsage) {
 			continue
 		}
 	}
-
 	if err := batch.Send(); err != nil {
 		log.Printf("Failed to send user data batch: %v", err)
 	}
@@ -227,11 +210,9 @@ func (s *analyticsService) flushUserData(items []models.UserDataUsage) {
 func (s *analyticsService) processWebsiteAccessBatch() {
 	batchSize := 1000
 	flushInterval := 5 * time.Second
-
 	batch := make([]models.WebsiteAccess, 0, batchSize)
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case item := <-s.websiteAccessChan:
@@ -253,7 +234,6 @@ func (s *analyticsService) flushWebsiteAccess(items []models.WebsiteAccess) {
 	if len(items) == 0 {
 		return
 	}
-
 	ctx := context.Background()
 	query := `INSERT INTO analytics.website_access (
 			user_id, username, domain, subdomain, full_url,
@@ -262,13 +242,11 @@ func (s *analyticsService) flushWebsiteAccess(items []models.WebsiteAccess) {
 		) VALUES (
 			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)`
-
 	batch, err := s.conn.PrepareBatch(ctx, query)
 	if err != nil {
 		log.Printf("Failed to prepare website access batch: %v", err)
 		return
 	}
-
 	for _, data := range items {
 		err := batch.Append(
 			data.UserID, data.Username, data.Domain, data.Subdomain, data.FullURL,
@@ -280,7 +258,6 @@ func (s *analyticsService) flushWebsiteAccess(items []models.WebsiteAccess) {
 			continue
 		}
 	}
-
 	if err := batch.Send(); err != nil {
 		log.Printf("Failed to send website access batch: %v", err)
 	}

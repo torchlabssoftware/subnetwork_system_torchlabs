@@ -61,7 +61,7 @@ func (w *Worker) ReadMessage() {
 			log.Println("[websocket] Error handling message: ", err)
 			w.egress <- Event{
 				Type:    "error",
-				Payload: replyPayload{Success: false, Payload: err.Error()},
+				Payload: ReplyPayload{Success: false, Payload: err.Error()},
 			}
 		}
 	}
