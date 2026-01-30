@@ -10,7 +10,7 @@ import (
 func RespondwithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("faild to marchel json responce: %v/n", err)
+		log.Printf("[RespondwithJSON] faild to marchel json responce: %v/n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -30,9 +30,9 @@ func RespondwithError(w http.ResponseWriter, code int, message string, err error
 				break
 			}
 		}
-		log.Printf("[ERROR] %s:%d : %v", shortFile, line, err)
+		log.Printf("[RespondwithError] %s:%d : %v", shortFile, line, err)
 	} else {
-		log.Printf("[ERROR] %v", err)
+		log.Printf("[RespondwithError] %v", err)
 	}
 
 	payload := struct {
