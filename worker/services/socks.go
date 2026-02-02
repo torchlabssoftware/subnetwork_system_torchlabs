@@ -101,16 +101,6 @@ func (s *SOCKS) callback(inConn net.Conn) {
 		return
 	}
 
-	if cmd == SOCKS5_CMD_UDP {
-		err = s.handleUDP(&inConn, address)
-		if err != nil {
-			log.Printf("socks5 udp error from %s: %s", inConn.RemoteAddr(), err)
-		}
-		s.worker.RemoveUserConnection(user)
-		utils.CloseConn(&inConn)
-		return
-	}
-
 	// Determine if we should use upstream proxy
 	useProxy := false
 	if s.worker.HasUpstreams() {
@@ -123,16 +113,26 @@ func (s *SOCKS) callback(inConn net.Conn) {
 	}
 	log.Printf("use proxy : %v, %s", useProxy, address)
 
-	err = s.OutToTCP(useProxy, address, &inConn, user, tag)
-	if err != nil {
-		if s.worker.HasUpstreams() {
-			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
-		} else {
-			log.Printf("connect to %s fail, ERR:%s", address, err)
+	if cmd == SOCKS5_CMD_UDP {
+		err = s.handleUDP(&inConn, address)
+		if err != nil {
+			log.Printf("socks5 udp error from %s: %s", inConn.RemoteAddr(), err)
 		}
 		s.worker.RemoveUserConnection(user)
 		utils.CloseConn(&inConn)
+		return
+	} else {
+		err = s.OutToTCP(useProxy, address, &inConn, user, tag)
+		if err != nil {
+			if s.worker.HasUpstreams() {
+				log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
+			} else {
+				log.Printf("connect to %s fail, ERR:%s", address, err)
+			}
+		}
 	}
+	s.worker.RemoveUserConnection(user)
+	utils.CloseConn(&inConn)
 }
 
 func (s *SOCKS) handleUDP(inConn *net.Conn, clientAddr string) error {
