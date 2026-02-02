@@ -83,7 +83,6 @@ func (m *WebsocketManager) processConfig(payload interface{}) {
 		log.Printf("[websocket] Failed to parse ConfigPayload: %v", err)
 		return
 	}
-
 	m.worker.processConfig(cfg)
 }
 
