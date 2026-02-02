@@ -1,3 +1,4 @@
 .agent/
 .vscode/
-
+deployment_strategy.md.resolved
+implementation_plan.md.resolved
