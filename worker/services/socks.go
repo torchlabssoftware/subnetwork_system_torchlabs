@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -114,7 +115,7 @@ func (s *SOCKS) callback(inConn net.Conn) {
 	log.Printf("use proxy : %v, %s", useProxy, address)
 
 	if cmd == SOCKS5_CMD_UDP {
-		err = s.handleUDP(&inConn, address)
+		err = s.handleUDP(&inConn, address, user)
 		if err != nil {
 			log.Printf("socks5 udp error from %s: %s", inConn.RemoteAddr(), err)
 		}
@@ -129,13 +130,15 @@ func (s *SOCKS) callback(inConn net.Conn) {
 			} else {
 				log.Printf("connect to %s fail, ERR:%s", address, err)
 			}
+			s.worker.RemoveUserConnection(user)
+			utils.CloseConn(&inConn)
 		}
+		return
 	}
-	s.worker.RemoveUserConnection(user)
-	utils.CloseConn(&inConn)
+
 }
 
-func (s *SOCKS) handleUDP(inConn *net.Conn, clientAddr string) error {
+func (s *SOCKS) handleUDP(inConn *net.Conn, clientAddr string, user string) error {
 	udpAddr, err := net.ResolveUDPAddr("udp", ":0")
 	if err != nil {
 		return fmt.Errorf("failed to resolve udp addr: %w", err)
@@ -160,30 +163,53 @@ func (s *SOCKS) handleUDP(inConn *net.Conn, clientAddr string) error {
 		return fmt.Errorf("failed to write reply: %w", err)
 	}
 
-	// Keep TCP open
+	// Keep TCP open and wait for it to close
+	closeUDP := make(chan struct{})
 	go func() {
 		io.Copy(io.Discard, *inConn)
-		udpConn.Close()
+		close(closeUDP)
+	}()
+
+	sessions := make(map[string]net.Conn)
+	var sessionsMu sync.Mutex
+	defer func() {
+		sessionsMu.Lock()
+		for _, conn := range sessions {
+			conn.Close()
+		}
+		sessionsMu.Unlock()
 	}()
 
 	buf := make([]byte, 65535)
 	for {
-		n, clientAddr, err := udpConn.ReadFromUDP(buf)
-		if err != nil {
-			return nil // Connection closed
+		// Check if TCP connection is still alive
+		select {
+		case <-closeUDP:
+			return nil
+		default:
 		}
 
-		// Handle SOCKS5 UDP header
-		// RSV(2) FRAG(1) ATYP(1) DST.ADDR DST.PORT DATA
+		udpConn.SetReadDeadline(time.Now().Add(time.Second))
+		n, cAddr, err := udpConn.ReadFromUDP(buf)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			return nil // Connection closed or other error
+		}
+
 		if n < 10 {
 			continue
 		}
 
-		// Simple implementation: extract destination and forward
-		// Current implementation doesn't support fragmentation (FRAG=0)
+		// Validate RSV
+		if buf[0] != 0x00 || buf[1] != 0x00 {
+			continue
+		}
+
 		frag := buf[2]
 		if frag != 0 {
-			continue
+			continue // Fragmentation not supported
 		}
 
 		var targetHost string
@@ -209,54 +235,80 @@ func (s *SOCKS) handleUDP(inConn *net.Conn, clientAddr string) error {
 			continue
 		}
 
-		targetAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", targetHost, targetPort))
-		if err != nil {
-			continue
+		targetAddrStr := fmt.Sprintf("%s:%d", targetHost, targetPort)
+		payload := make([]byte, n-headerLen)
+		copy(payload, buf[headerLen:n])
+
+		sessionsMu.Lock()
+		conn, ok := sessions[targetAddrStr]
+		if !ok {
+			// Create new session
+			tAddr, err := net.ResolveUDPAddr("udp", targetAddrStr)
+			if err != nil {
+				sessionsMu.Unlock()
+				continue
+			}
+
+			newConn, err := net.DialUDP("udp", nil, tAddr)
+			if err != nil {
+				sessionsMu.Unlock()
+				continue
+			}
+			conn = newConn
+			sessions[targetAddrStr] = conn
+
+			// Start response relay for this session
+			go func(targetConn net.Conn, clientUDPAddr *net.UDPAddr, tHost string, tPort int) {
+				respBuf := make([]byte, 65535)
+				for {
+					targetConn.SetReadDeadline(time.Now().Add(time.Minute * 2))
+					rn, err := targetConn.Read(respBuf)
+					if err != nil {
+						sessionsMu.Lock()
+						delete(sessions, targetAddrStr)
+						sessionsMu.Unlock()
+						targetConn.Close()
+						return
+					}
+
+					// Build SOCKS5 UDP header for response
+					respHeader := make([]byte, 0, 22)
+					respHeader = append(respHeader, 0, 0, 0) // RSV, FRAG
+
+					// Use original target address type/info
+					if ip4 := net.ParseIP(tHost).To4(); ip4 != nil {
+						respHeader = append(respHeader, SOCKS5_ATYP_IPV4)
+						respHeader = append(respHeader, ip4...)
+					} else if ip6 := net.ParseIP(tHost).To16(); ip6 != nil {
+						respHeader = append(respHeader, SOCKS5_ATYP_IPV6)
+						respHeader = append(respHeader, ip6...)
+					} else {
+						respHeader = append(respHeader, SOCKS5_ATYP_DOMAIN)
+						respHeader = append(respHeader, byte(len(tHost)))
+						respHeader = append(respHeader, []byte(tHost)...)
+					}
+
+					pBytes := make([]byte, 2)
+					binary.BigEndian.PutUint16(pBytes, uint16(tPort))
+					respHeader = append(respHeader, pBytes...)
+
+					finalPacket := append(respHeader, respBuf[:rn]...)
+					udpConn.WriteToUDP(finalPacket, clientUDPAddr)
+
+					// Telemetry
+					s.worker.RecordDataUsage(0, uint64(rn), user, clientUDPAddr.IP.String(), tHost, uint16(tPort), false)
+					s.worker.AddThroughput(uint64(rn))
+				}
+			}(conn, cAddr, targetHost, targetPort)
 		}
+		sessionsMu.Unlock()
 
-		// Forward to target
-		payload := buf[headerLen:n]
-
-		go func(data []byte, tAddr *net.UDPAddr, cAddr *net.UDPAddr, header []byte) {
-			// Send to target
-			conn, err := net.DialUDP("udp", nil, tAddr)
-			if err != nil {
-				return
-			}
-			defer conn.Close()
-
-			_, err = conn.Write(data)
-			if err != nil {
-				return
-			}
-
-			// Wait for response
-			respBuf := make([]byte, 65535)
-			conn.SetReadDeadline(time.Now().Add(time.Second * 30))
-			rn, _, err := conn.ReadFromUDP(respBuf)
-			if err != nil {
-				return
-			}
-
-			respHeader := make([]byte, 0, 22)
-			respHeader = append(respHeader, 0, 0, 0) // RSV, FRAG
-
-			if ip4 := tAddr.IP.To4(); ip4 != nil {
-				respHeader = append(respHeader, SOCKS5_ATYP_IPV4)
-				respHeader = append(respHeader, ip4...)
-			} else {
-				respHeader = append(respHeader, SOCKS5_ATYP_IPV6)
-				respHeader = append(respHeader, tAddr.IP.To16()...)
-			}
-
-			pBytes := make([]byte, 2)
-			binary.BigEndian.PutUint16(pBytes, uint16(tAddr.Port))
-			respHeader = append(respHeader, pBytes...)
-
-			finalPacket := append(respHeader, respBuf[:rn]...)
-			udpConn.WriteToUDP(finalPacket, cAddr)
-
-		}(payload, targetAddr, clientAddr, buf[:headerLen])
+		// Send to target
+		_, err = conn.Write(payload)
+		if err == nil {
+			s.worker.RecordDataUsage(uint64(len(payload)), 0, user, cAddr.IP.String(), targetHost, uint16(targetPort), false)
+			s.worker.AddThroughput(uint64(len(payload)))
+		}
 	}
 	return nil
 }
