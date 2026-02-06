@@ -20,13 +20,9 @@ func NewServerChannel(ip string, port int) ServerChannel {
 		ip:   ip,
 		port: port,
 		errAcceptHandler: func(err error) {
-			fmt.Printf("accept error , ERR:%s", err)
+			fmt.Printf("[server channel] accept error , ERR:%s", err)
 		},
 	}
-}
-
-func (sc *ServerChannel) SetErrAcceptHandler(fn func(err error)) {
-	sc.errAcceptHandler = fn
 }
 
 func (sc *ServerChannel) ListenTls(certBytes, keyBytes []byte, fn func(conn net.Conn)) (err error) {
