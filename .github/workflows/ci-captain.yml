@@ -44,7 +44,7 @@ jobs:
           EOF
     
       - name: Build and run Docker Compose stack
-        run: docker compose --env-file .env.dev -f ./captain/docker-compose.dev.yml up --build -d
+        run: docker compose --env-file .env.dev -f docker-compose.dev.yml up --build -d
         working-directory: ./captain
 
       - name: Wait for services to be ready
