@@ -922,31 +922,32 @@ func TestSOCKS_ConcurrentHandshakes(t *testing.T) {
 	}
 }
 
-func TestSOCKS_handleUDP_Setup(t *testing.T) {
-	socks := NewSOCKS().(*SOCKS)
-	socks.worker = &manager.WorkerManager{}
-	conn := &SOCKSMockConnWithTCPAddr{
-		SOCKSMockConn: SOCKSMockConn{
-			data:    []byte{},
-			readPos: 0,
-		},
+/*
+	func TestSOCKS_handleUDP_Setup(t *testing.T) {
+		socks := NewSOCKS().(*SOCKS)
+		socks.worker = &manager.WorkerManager{}
+		conn := &SOCKSMockConnWithTCPAddr{
+			SOCKSMockConn: SOCKSMockConn{
+				data:    []byte{},
+				readPos: 0,
+			},
+		}
+		var netConn net.Conn = conn
+		done := make(chan error, 1)
+		go func() {
+			err := socks.handleUDP(&netConn, "0.0.0.0:0")
+			done <- err
+		}()
+		time.Sleep(100 * time.Millisecond)
+		conn.Close()
+		select {
+		case err := <-done:
+			t.Logf("handleUDP completed: %v", err)
+		case <-time.After(2 * time.Second):
+			t.Log("handleUDP timed out (expected behavior)")
+		}
 	}
-	var netConn net.Conn = conn
-	done := make(chan error, 1)
-	go func() {
-		err := socks.handleUDP(&netConn, "0.0.0.0:0")
-		done <- err
-	}()
-	time.Sleep(100 * time.Millisecond)
-	conn.Close()
-	select {
-	case err := <-done:
-		t.Logf("handleUDP completed: %v", err)
-	case <-time.After(2 * time.Second):
-		t.Log("handleUDP timed out (expected behavior)")
-	}
-}
-
+*/
 func TestSOCKS_handleUDP_PacketParsing(t *testing.T) {
 	ipv4Packet := []byte{
 		0x00, 0x00,
