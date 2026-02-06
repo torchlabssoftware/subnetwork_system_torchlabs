@@ -26,6 +26,30 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: captain/go.sum
 
+      - name: Create .env.dev file
+        run: |
+          cat <<EOF > ./captain/.env.dev
+          APP_ENV=${{ secrets.APP_ENV }}
+          PORT=${{ secrets.PORT }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_URL=postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/${{ secrets.POSTGRES_DB }}?sslmode=disable
+          ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
+          WORKER_API_KEY=${{ secrets.WORKER_API_KEY }}
+          CLICKHOUSE_USER=${{ secrets.CLICKHOUSE_USER }}
+          CLICKHOUSE_PASSWORD=${{ secrets.CLICKHOUSE_PASSWORD }}
+          CLICKHOUSE_DB=${{ secrets.CLICKHOUSE_DB }}
+          CLICKHOUSE_URL=${{ secrets.CLICKHOUSE_URL }}
+          EOF
+    
+      - name: Build and run Docker Compose stack
+        run: docker compose --env-file .env.dev -f ./captain/docker-compose.dev.yml up --build -d
+        working-directory: ./captain
+
+      - name: Wait for services to be ready
+        run: sleep 20s
+
       - name: Run tests
         working-directory: ./captain
         run: go test ./tests/e2e/...
