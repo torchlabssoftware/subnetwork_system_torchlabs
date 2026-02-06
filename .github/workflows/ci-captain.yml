@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: torchlabs/captain
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/captain
 
 jobs:
   build-and-push:
