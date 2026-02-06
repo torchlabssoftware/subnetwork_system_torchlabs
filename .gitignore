@@ -1,4 +1,5 @@
 .agent/
 .vscode/
-deployment_strategy.md.resolved
-implementation_plan.md.resolved
+deployment_strategy.md
+implementation_plan.md
+jira_items.md
