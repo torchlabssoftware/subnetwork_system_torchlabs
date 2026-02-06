@@ -5,3 +5,7 @@
 tmp/
 .air.toml
 dump_data.txt
+.dockerignore
+.docker-compose.dev.yml
+.docker-compose.prod.yml
+Dockerfile
