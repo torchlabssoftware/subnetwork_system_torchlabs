@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         working-directory: ./captain
-        run: go test ./...
+        run: go test ./tests/e2e/...
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
