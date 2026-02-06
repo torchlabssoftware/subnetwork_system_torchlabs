@@ -13,7 +13,7 @@ services:
   # restart: unless-stopped
   postgres_dev:
     image: postgres:15
-    container_name: subnetwork_system_postgres_dev
+    container_name: subnetwork_system_database_dev
     restart: always
     environment:
       POSTGRES_USER: myuser
@@ -24,9 +24,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/seed:/docker-entrypoint-initdb.d
-  clickhouse:
+  clickhouse_dev:
     image: clickhouse/clickhouse-server:latest
-    container_name: subnetwork_system_clickhouse
+    container_name: subnetwork_system_clickhouse_dev
     environment:
       CLICKHOUSE_USER: 'analytics'
       CLICKHOUSE_PASSWORD: 'analytics'
