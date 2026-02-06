@@ -16,9 +16,9 @@ services:
     container_name: subnetwork_system_database_prod
     restart: always
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: subnetwork_system_database_prod
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -28,8 +28,8 @@ services:
     image: clickhouse/clickhouse-server:latest
     container_name: subnetwork_system_clickhouse_prod
     environment:
-      CLICKHOUSE_USER: 'analytics'
-      CLICKHOUSE_PASSWORD: 'analytics'
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     ports:
       - "8123:8123"
       - "9000:9000"
