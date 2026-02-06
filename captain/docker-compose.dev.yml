@@ -1,16 +1,4 @@
 services:
-  #app:
-  # build: .
-  # container_name: subnetwork_system_dev
-  # depends_on:
-  #   - postgres_dev
-  # ports:
-  #   - "8080:8080"
-  # env_file:
-  #  - .env.dev
-  # environment:
-  #   - APP_ENV=dev
-  # restart: unless-stopped
   postgres_dev:
     image: postgres:15
     container_name: subnetwork_system_database_dev

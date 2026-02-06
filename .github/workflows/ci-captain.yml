@@ -2,7 +2,7 @@ name: Build and Push Captain Image
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'captain/**'
     tags:

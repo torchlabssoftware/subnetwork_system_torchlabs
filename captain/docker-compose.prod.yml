@@ -4,12 +4,11 @@ services:
    container_name: subnetwork_system_prod
    depends_on:
     - postgres_prod
+    - clickhouse_prod
    ports:
     - "8080:8080"
    env_file:
     - .env.prod
-   environment:
-    - APP_ENV=prod
    restart: unless-stopped
   postgres_prod:
     image: postgres:15
