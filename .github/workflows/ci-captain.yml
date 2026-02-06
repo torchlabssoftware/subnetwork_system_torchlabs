@@ -34,7 +34,7 @@ jobs:
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-          POSTGRES_URL=postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/${{ secrets.POSTGRES_DB }}?sslmode=disable
+          POSTGRES_URL=postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/${{ secrets.POSTGRES_DB }}?sslmode=disable
           ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
           WORKER_API_KEY=${{ secrets.WORKER_API_KEY }}
           CLICKHOUSE_USER=${{ secrets.CLICKHOUSE_USER }}
