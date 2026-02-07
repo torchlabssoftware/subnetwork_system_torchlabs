@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: torchlabs/worker
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/worker
 
 jobs:
   build-and-push:
@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         working-directory: ./worker
-        run: go test ./... || true  # Tests may not exist yet
+        run: go test ./...
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
