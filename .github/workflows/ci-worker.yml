@@ -2,7 +2,7 @@ name: Build and Push Worker Image
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'worker/**'
     tags:
