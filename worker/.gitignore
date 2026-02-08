@@ -4,4 +4,4 @@ subnetwork_system/
 proxy.crt
 proxy.exe
 proxy.key
-env.dev
+.env.dev
