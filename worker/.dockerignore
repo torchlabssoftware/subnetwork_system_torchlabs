@@ -1,4 +1,5 @@
 proxy.crt
 proxy.exe
 proxy.key
-env.dev
+.env.dev
+.env.prod
