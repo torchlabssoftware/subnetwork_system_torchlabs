@@ -1,6 +1,3 @@
-/.idea
-/goproxy
-subnetwork_system/
 proxy.crt
 proxy.exe
 proxy.key
