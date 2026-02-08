@@ -19,9 +19,6 @@ var (
 )
 
 func initConfig() (err error) {
-	//load env
-	envConfig = manager.EnvLoad()
-
 	//keygen
 	if len(os.Args) > 1 {
 		if os.Args[1] == "keygen" {
@@ -29,6 +26,9 @@ func initConfig() (err error) {
 			os.Exit(0)
 		}
 	}
+
+	//load env
+	envConfig = manager.EnvLoad()
 
 	//define  args
 	args := services.Args{}
