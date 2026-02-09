@@ -127,6 +127,7 @@ jobs:
             CLICKHOUSE_PASSWORD=${{ secrets.CLICKHOUSE_PASSWORD }}
             CLICKHOUSE_DB=${{ secrets.CLICKHOUSE_DB }}
             CLICKHOUSE_URL=${{ secrets.CLICKHOUSE_URL }}
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
             EOF
             docker compose --env-file .env.prod -f docker-compose.prod.yml pull
             docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
