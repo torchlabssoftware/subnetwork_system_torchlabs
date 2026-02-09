@@ -15,6 +15,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment: dev
     
     steps:
       - name: Checkout repository
@@ -87,6 +88,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    environment: prod
     if: github.ref == 'refs/heads/master'
     
     steps:
@@ -109,14 +111,12 @@ jobs:
           host: ${{ secrets.CAPTAIN_VM_HOST }}
           username: ${{ secrets.CAPTAIN_VM_USER }}
           key: ${{ secrets.CAPTAIN_VM_SSH_KEY }}
-          envs: DOCKERHUB_USERNAME,APP_ENV,PORT,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,ADMIN_API_KEY,WORKER_API_KEY,CLICKHOUSE_USER,CLICKHOUSE_PASSWORD,CLICKHOUSE_DB,CLICKHOUSE_URL
           script: |
             mkdir -p ~/captain
             cd ~/captain
             cat <<EOF > .env.prod
             APP_ENV=${{ secrets.APP_ENV }}
-            PORT=${{ secrets.PORT }}
-            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            PORT=${{ secrets.PORT }}  
             POSTGRES_USER=${{ secrets.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
             POSTGRES_DB=${{ secrets.POSTGRES_DB }}
