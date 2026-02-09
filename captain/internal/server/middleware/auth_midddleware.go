@@ -11,7 +11,7 @@ import (
 
 func AdminAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		adminKey := os.Getenv("ADMIN_API_KEY")
+		adminKey := strings.TrimSpace(os.Getenv("ADMIN_API_KEY"))
 		if adminKey == "" {
 			functions.RespondwithError(w, http.StatusInternalServerError, "api key not found", fmt.Errorf("api key not found"))
 			return
@@ -29,7 +29,7 @@ func AdminAuthentication(next http.Handler) http.Handler {
 			return
 		}
 
-		key := parts[1]
+		key := strings.TrimSpace(parts[1])
 		if key != adminKey {
 			http.Error(w, "forbidden", http.StatusUnauthorized)
 			return
@@ -41,7 +41,7 @@ func AdminAuthentication(next http.Handler) http.Handler {
 
 func WorkerAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		workerKey := os.Getenv("WORKER_API_KEY")
+		workerKey := strings.TrimSpace(os.Getenv("WORKER_API_KEY"))
 		if workerKey == "" {
 			functions.RespondwithError(w, http.StatusInternalServerError, "api key not found", fmt.Errorf("api key not found"))
 			return
@@ -59,7 +59,7 @@ func WorkerAuthentication(next http.Handler) http.Handler {
 			return
 		}
 
-		key := parts[1]
+		key := strings.TrimSpace(parts[1])
 		if key != workerKey {
 			http.Error(w, "forbidden", http.StatusUnauthorized)
 			return
