@@ -92,54 +92,50 @@ WHERE
 ----------------------------------------------------------
 -- 8. Upstreams
 ----------------------------------------------------------
-INSERT INTO upstream (tag, upstream_provider, username, password, config_format, port, domain) VALUES
-('netnutusa',   'netnut',  'user', 'pass', '-res-[country]-sid-[session]', 8000, 'netnut.usa.com'),
-('geonodeusa',  'geonode', 'pxy_ud5azgr1-country-us', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyalusa',  'iproyal', 'user', 'pass', '-country-[country]_session-[session]_lifetime-1h', 8002, 'iproyal.usa.com'),
+INSERT INTO upstream (tag, upstream_provider,username,password, config_format, port, domain) VALUES
+('netnutusa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6500, 'netnut.x.proxiess.com'),
+('netnutsocks5usa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6503, 'socksnetnut.x.proxiess.com'),
+('geonodeusa', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
+('iproyalusa', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9789, 'boilingresi.x.proxiess.com'),
 
-('netnuteu',    'netnut',  'user', 'pass', '-res-[country]-sid-[session]', 8003, 'netnut.eu.com'),
-('geonodeeu',   'geonode', 'pxy_ud5azgr1-country-de', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyaleu',   'iproyal', 'user', 'pass', '-country-[country]_session-[session]_lifetime-1h', 8005, 'iproyal.eu.com'),
+('netnuteu', 'netnut','uscFAPhxyGer', '9dgbjKKV', '-res-[country]-sid-[session]', 6501, 'netnutasia.x.proxiess.com'),
+('geonodeeu', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
+('iproyaleu', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9790, 'boilingresieu.x.proxiess.com'),
 
-('netnutasia',  'netnut',  'user', 'pass', '-res-[country]-sid-[session]', 8006, 'netnut.asia.com'),
-('geonodeasia', 'geonode', 'pxy_ud5azgr1-country-jp', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyalasia', 'iproyal', 'user', 'pass', '-country-[country]_session-[session]_lifetime-1h', 8008, 'iproyal.asia.com');
+('netnutasia', 'netnut','cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6502, 'netnuteu.x.proxiess.com'),
+('geonodeasia', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
+('iproyalasia', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9791, 'boilingresiasia.x.proxiess.com');
+
 
 ----------------------------------------------------------
 -- 9. Upstream Weights (FIXED)
 ----------------------------------------------------------
 INSERT INTO pool_upstream_weight (pool_id, upstream_id, weight)
-SELECT p.id, u.id, w.weight
-FROM (
-    VALUES
-    ('netnutusa', 'netnutusa', 50),
-    ('netnuteu', 'netnuteu', 50),
-    ('netnutasia', 'netnutasia', 50),
-    ('netnutsocks5usa', 'netnuteu', 55),
-    ('netnutsocks5eu', 'netnuteu', 55),
-    ('netnutsocks5asia', 'netnutasia', 55),
-    ('geonodeusa', 'geonodeusa', 50),
-    ('geonodeeu', 'geonodeeu', 50),
-    ('geonodeasia', 'geonodeasia', 50)
-) AS w(pool_tag, upstream_tag, weight)
-JOIN pool p ON p.tag = w.pool_tag
-JOIN upstream u ON u.tag = w.upstream_tag;
+VALUES
+((SELECT id FROM pool WHERE tag='netnutusa'), (SELECT id FROM upstream WHERE tag='netnutusa'), 50),
+((SELECT id FROM pool WHERE tag='netnutsocks5usa'), (SELECT id FROM upstream WHERE tag='netnutsocks5usa'), 50),
+((SELECT id FROM pool WHERE tag='netnuteu'), (SELECT id FROM upstream WHERE tag='netnuteu'), 50),
+((SELECT id FROM pool WHERE tag='netnutasia'), (SELECT id FROM upstream WHERE tag='netnutasia'), 50),
+((SELECT id FROM pool WHERE tag='geonodeusa'), (SELECT id FROM upstream WHERE tag='geonodeusa'), 50),
+((SELECT id FROM pool WHERE tag='geonodeeu'), (SELECT id FROM upstream WHERE tag='geonodeeu'), 50),
+((SELECT id FROM pool WHERE tag='geonodeasia'), (SELECT id FROM upstream WHERE tag='geonodeasia'), 50);
 
 ----------------------------------------------------------
 -- 10. Workers
 ----------------------------------------------------------
-INSERT INTO worker (name, region_id, ip_address, status, pool_id, port, last_seen) VALUES
-('worker-usa-1',   (SELECT id FROM region WHERE name='North America'), '136.116.66.60', 'active', (SELECT id FROM pool WHERE tag='geonodeusa'),   38080, NOW()),
-('worker-eu-1',    (SELECT id FROM region WHERE name='Europe'),        '34.88.145.246', 'active', (SELECT id FROM pool WHERE tag='geonodeeu'),    38081, NOW()),
-('worker-asia-1',  (SELECT id FROM region WHERE name='Asia'),          '34.131.224.30','active', (SELECT id FROM pool WHERE tag='geonodeasia'), 38082, NOW());
+INSERT INTO worker (name, region_id, ip_address,status, pool_id,port, last_seen) VALUES
+('usa-00000000000000000000000000000000', (SELECT id FROM region WHERE name='North America'), '34.67.96.169', 'active', (SELECT id FROM pool WHERE tag='geonodeusa'),9000, NOW()),
+('usa-11111111111111111111111111111111', (SELECT id FROM region WHERE name='North America'), '34.67.96.169', 'active', (SELECT id FROM pool WHERE tag='netnutsocks5usa'),7003, NOW()),
+('eu-00000000000000000000000000000000',  (SELECT id FROM region WHERE name='Europe'), '34.88.82.214', 'active', (SELECT id FROM pool WHERE tag='geonodeeu'),9001, NOW()),
+('asia-00000000000000000000000000000000',(SELECT id FROM region WHERE name='Asia'), '34.131.224.206', 'active', (SELECT id FROM pool WHERE tag='geonodeasia'),9002, NOW());
 
 ----------------------------------------------------------
 -- 11. Worker Domains
 ----------------------------------------------------------
 INSERT INTO worker_domains (worker_id, domain) VALUES
-((SELECT id FROM worker WHERE name='worker-usa-1'),   'geonode.usa.upstream-y.com'),
-((SELECT id FROM worker WHERE name='worker-eu-1'),    'netnut.eu.upstream-y.com'),
-((SELECT id FROM worker WHERE name='worker-asia-1'),  'netnut.asia.upstream-y.com');
+((SELECT id FROM worker WHERE name='usa-00000000000000000000000000000000'), 'geonode.usa.upstream-y.com'),
+((SELECT id FROM worker WHERE name='eu-00000000000000000000000000000000'),  'netnut.eu.upstream-y.com'),
+((SELECT id FROM worker WHERE name='asia-00000000000000000000000000000000'),'netnut.asia.upstream-y.com');
 
 ----------------------------------------------------------
 -- Summary
