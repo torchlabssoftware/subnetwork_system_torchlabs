@@ -1,17 +1,17 @@
 services:
   app:
-   build: .
-   container_name: subnetwork_system_prod
-   depends_on:
-    postgres_prod:
-      condition: service_healthy
-    clickhouse_prod:
-      condition: service_healthy
-   ports:
-    - "8080:8080"
-   env_file:
-    - .env.prod
-   restart: unless-stopped
+    image: ${DOCKERHUB_USERNAME}/captain:latest
+    container_name: subnetwork_system_prod
+    depends_on:
+      postgres_prod:
+        condition: service_healthy
+      clickhouse_prod:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.prod
+    restart: unless-stopped
   postgres_prod:
     image: postgres:15
     container_name: subnetwork_system_database_prod

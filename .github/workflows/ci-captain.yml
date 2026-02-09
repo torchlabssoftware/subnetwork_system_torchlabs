@@ -83,3 +83,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Deploy to Captain VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CAPTAIN_VM_HOST }}
+          username: ${{ secrets.CAPTAIN_VM_USER }}
+          key: ${{ secrets.CAPTAIN_VM_SSH_KEY }}
+          script: |
+            cd ~/captain
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
