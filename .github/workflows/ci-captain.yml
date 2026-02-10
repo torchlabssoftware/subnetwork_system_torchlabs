@@ -131,4 +131,3 @@ jobs:
             EOF
             docker compose --env-file .env.prod -f docker-compose.prod.yml pull
             docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
-            docker image prune -f

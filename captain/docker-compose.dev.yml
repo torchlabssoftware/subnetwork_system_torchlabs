@@ -12,6 +12,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/seed:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   clickhouse_dev:
     image: clickhouse/clickhouse-server:latest
     container_name: subnetwork_system_clickhouse_dev
@@ -24,6 +29,11 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./sql/clickhouse:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5  
 
 volumes:
   postgres_data:
