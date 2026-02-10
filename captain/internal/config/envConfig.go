@@ -7,7 +7,11 @@ import (
 )
 
 type Config struct {
+	APP_ENV             string
 	PORT                string
+	POSTGRES_USER       string
+	POSTGRES_PASSWORD   string
+	POSTGRES_DB         string
 	POSTGRES_URL        string
 	Admin_API_KEY       string
 	Worker_API_KEY      string
@@ -20,7 +24,11 @@ type Config struct {
 func Load() Config {
 
 	config := Config{
+		APP_ENV:             getEnv("APP_ENV", "dev"),
 		PORT:                getEnv("PORT", "8080"),
+		POSTGRES_USER:       getEnv("POSTGRES_USER", ""),
+		POSTGRES_PASSWORD:   getEnv("POSTGRES_PASSWORD", ""),
+		POSTGRES_DB:         getEnv("POSTGRES_DB", ""),
 		POSTGRES_URL:        getEnv("POSTGRES_URL", ""),
 		Admin_API_KEY:       getEnv("ADMIN_API_KEY", ""),
 		Worker_API_KEY:      getEnv("WORKER_API_KEY", ""),
@@ -44,6 +52,9 @@ func getEnv(key, fallback string) string {
 
 func (c *Config) validate() {
 	required := map[string]string{
+		"POSTGRES_USER":       c.POSTGRES_USER,
+		"POSTGRES_PASSWORD":   c.POSTGRES_PASSWORD,
+		"POSTGRES_DB":         c.POSTGRES_DB,
 		"POSTGRES_URL":        c.POSTGRES_URL,
 		"ADMIN_API_KEY":       c.Admin_API_KEY,
 		"WORKER_API_KEY":      c.Worker_API_KEY,
