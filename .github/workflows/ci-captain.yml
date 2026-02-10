@@ -95,6 +95,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Fix file permissions on Captain VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CAPTAIN_VM_HOST }}
+          username: ${{ secrets.CAPTAIN_VM_USER }}
+          key: ${{ secrets.CAPTAIN_VM_SSH_KEY }}
+          script: |
+            sudo chown -R $USER:$USER ~/captain/sql || true
+
       - name: Copy files to Captain VM
         uses: appleboy/scp-action@v0.1.7
         with:
