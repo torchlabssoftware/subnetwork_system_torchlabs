@@ -101,7 +101,7 @@ jobs:
           host: ${{ secrets.CAPTAIN_VM_HOST }}
           username: ${{ secrets.CAPTAIN_VM_USER }}
           key: ${{ secrets.CAPTAIN_VM_SSH_KEY }}
-          source: "captain/docker-compose.prod.yml"
+          source: "captain/docker-compose.prod.yml,captain/sql/seed/**,captain/sql/clickhouse/**"
           target: "~/captain"
           strip_components: 1
 
