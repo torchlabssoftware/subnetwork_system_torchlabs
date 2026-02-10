@@ -1,8 +1,8 @@
 -- Create analytics database
-CREATE DATABASE IF NOT EXISTS analytics;
+CREATE DATABASE IF NOT EXISTS analytics_prod;
 
 -- User data usage (detailed granularity)
-CREATE TABLE IF NOT EXISTS analytics.user_data_usage (
+CREATE TABLE IF NOT EXISTS analytics_prod.user_data_usage (
     timestamp DateTime64(3) DEFAULT now64(3),
     date Date DEFAULT toDate(timestamp),
     user_id UUID,
@@ -24,7 +24,7 @@ ORDER BY (user_id, date, timestamp)
 TTL date + INTERVAL 90 DAY;
 
 -- Hourly aggregated user usage (for fast queries)
-CREATE TABLE IF NOT EXISTS analytics.user_usage_hourly (
+CREATE TABLE IF NOT EXISTS analytics_prod.user_usage_hourly (
     date Date,
     hour DateTime,
     user_id UUID,
@@ -38,7 +38,7 @@ PARTITION BY toYYYYMM(date)
 ORDER BY (user_id, date, hour);
 
 -- Daily aggregated user usage
-CREATE TABLE IF NOT EXISTS analytics.user_usage_daily (
+CREATE TABLE IF NOT EXISTS analytics_prod.user_usage_daily (
     date Date,
     user_id UUID,
     username String,
@@ -51,7 +51,7 @@ PARTITION BY toYYYYMM(date)
 ORDER BY (user_id, date);
 
 -- Worker health metrics
-CREATE TABLE IF NOT EXISTS analytics.worker_health (
+CREATE TABLE IF NOT EXISTS analytics_prod.worker_health (
     timestamp DateTime64(3) DEFAULT now64(3),
     date Date DEFAULT toDate(timestamp),
     worker_id UUID,
@@ -72,7 +72,7 @@ ORDER BY (worker_id, date, timestamp)
 TTL date + INTERVAL 60 DAY;
 
 -- Upstream Health metrics
-CREATE TABLE IF NOT EXISTS analytics.worker_upstream_health (
+CREATE TABLE IF NOT EXISTS analytics_prod.worker_upstream_health (
     timestamp DateTime64(3) DEFAULT now64(3),
     date Date DEFAULT toDate(timestamp),
     worker_id UUID,
@@ -87,7 +87,7 @@ ORDER BY (worker_id, upstream_id, date, timestamp)
 TTL date + INTERVAL 60 DAY;
 
 -- Website access patterns
-CREATE TABLE IF NOT EXISTS analytics.website_access (
+CREATE TABLE IF NOT EXISTS analytics_prod.website_access (
     timestamp DateTime64(3) DEFAULT now64(3),
     date Date DEFAULT toDate(timestamp),
     user_id UUID,
@@ -107,8 +107,8 @@ ORDER BY (domain, date, timestamp)
 TTL date + INTERVAL 30 DAY;
 
 -- Create materialized view for hourly aggregation
-CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.user_usage_hourly_mv
-TO analytics.user_usage_hourly
+CREATE MATERIALIZED VIEW IF NOT EXISTS analytics_prod.user_usage_hourly_mv
+TO analytics_prod.user_usage_hourly
 AS
 SELECT
     toDate(timestamp) AS date,
@@ -119,12 +119,12 @@ SELECT
     sumState(bytes_received) AS bytes_received,
     countState() AS request_count,
     uniqState(destination_host) AS unique_destinations
-FROM analytics.user_data_usage
+FROM analytics_prod.user_data_usage
 GROUP BY date, hour, user_id, username;
 
 -- Create view for daily aggregation
-CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.user_usage_daily_mv
-TO analytics.user_usage_daily
+CREATE MATERIALIZED VIEW IF NOT EXISTS analytics_prod.user_usage_daily_mv
+TO analytics_prod.user_usage_daily
 AS
 SELECT
     date,
@@ -134,6 +134,6 @@ SELECT
     sumState(bytes_received) AS bytes_received,
     countState() AS request_count,
     uniqState(destination_host) AS unique_destinations
-FROM analytics.user_data_usage
+FROM analytics_prod.user_data_usage
 GROUP BY date, user_id, username;
 
