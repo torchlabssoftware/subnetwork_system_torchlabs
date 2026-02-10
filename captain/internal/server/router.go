@@ -51,9 +51,7 @@ func NewRouter(pool *sql.DB, clickHouseConn driver.Conn, websocketManager models
 		r.Mount("/users", u.AdminRoutes())
 		r.Mount("/pools", p.AdminRoutes())
 		r.Mount("/worker", w.AdminRoutes())
-		r.Route("/analytics", func(r chi.Router) {
-			a.RegisterRoutes(r)
-		})
+		r.Mount("/analytics", a.RegisterRoutes())
 	})
 
 	router.Route("/worker", func(r chi.Router) {

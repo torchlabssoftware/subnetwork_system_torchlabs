@@ -21,14 +21,17 @@ import (
 
 // Test configuration
 var (
-	testServer    *httptest.Server
-	adminClient   *helpers.TestClient
-	workerClient  *helpers.TestClient
-	testDB        *sql.DB
-	AdminAPIKey   string
-	WorkerAPIKey  string
-	PostgresURL   string
-	ClickHouseURL string
+	testServer         *httptest.Server
+	adminClient        *helpers.TestClient
+	workerClient       *helpers.TestClient
+	testDB             *sql.DB
+	AdminAPIKey        string
+	WorkerAPIKey       string
+	PostgresURL        string
+	ClickHouseURL      string
+	ClickHouseDB       string
+	ClickHouseUser     string
+	ClickHousePassword string
 )
 
 func TestMain(m *testing.M) {
@@ -46,6 +49,9 @@ func TestMain(m *testing.M) {
 	WorkerAPIKey = envConfig.Worker_API_KEY
 	PostgresURL = envConfig.POSTGRES_URL
 	ClickHouseURL = envConfig.CLICKHOUSE_URL
+	ClickHouseDB = envConfig.CLICKHOUSE_DB
+	ClickHouseUser = envConfig.CLICKHOUSE_USER
+	ClickHousePassword = envConfig.CLICKHOUSE_PASSWORD
 	if err := setup(); err != nil {
 		log.Fatalf("Failed to setup test environment: %v", err)
 	}
@@ -69,9 +75,9 @@ func setup() error {
 	clickhouseConn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{ClickHouseURL},
 		Auth: clickhouse.Auth{
-			Database: "analytics",
-			Username: "analytics",
-			Password: "analytics",
+			Database: ClickHouseDB,
+			Username: ClickHouseUser,
+			Password: ClickHousePassword,
 		},
 		Debug: false,
 		// Debugf: func(format string, v ...interface{}) {

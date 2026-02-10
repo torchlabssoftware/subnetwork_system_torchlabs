@@ -19,10 +19,12 @@ func NewAnalyticsHandler(s models.AnalyticsService) *AnalyticsHandler {
 	return &AnalyticsHandler{service: s}
 }
 
-func (h *AnalyticsHandler) RegisterRoutes(r chi.Router) {
+func (h *AnalyticsHandler) RegisterRoutes() chi.Router {
+	r := chi.NewRouter()
 	r.Get("/user/{user_id}/usage", h.GetUserUsage)
 	r.Get("/worker/{worker_id}/health", h.GetWorkerHealth)
 	r.Get("/user/{user_id}/website-access", h.GetUserWebsiteAccess)
+	return r
 }
 
 func (h *AnalyticsHandler) GetUserUsage(w http.ResponseWriter, r *http.Request) {

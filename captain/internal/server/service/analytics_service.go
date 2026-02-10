@@ -51,7 +51,7 @@ func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data models.
 
 func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data models.WorkerHealth) error {
 	queryWorker := `
-		INSERT INTO analytics.worker_health (
+		INSERT INTO analytics_db_subnetworksystem.worker_health (
 			worker_id, worker_name, region, pool_tag, status, cpu_usage, memory_usage,
 			active_connections, total_connections, bytes_throughput_per_sec, error_rate
 		) VALUES (
@@ -65,7 +65,7 @@ func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data models.W
 		return fmt.Errorf("failed to insert worker health: %w", err)
 	}
 	if len(data.Upstreams) > 0 {
-		batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO analytics.worker_upstream_health (worker_id, upstream_id, upstream_tag, status, latency, error_rate)")
+		batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO analytics_db_subnetworksystem.worker_upstream_health (worker_id, upstream_id, upstream_tag, status, latency, error_rate)")
 		if err != nil {
 			return fmt.Errorf("failed to prepare batch for upstreams: %w", err)
 		}
@@ -97,7 +97,7 @@ func (s *analyticsService) GetUserUsage(ctx context.Context, userID uuid.UUID, f
 				sumMerge(bytes_received) as bytes_received,
 				countMerge(request_count) as request_count,
 				uniqMerge(unique_destinations) as unique_destinations
-			FROM analytics.user_usage_hourly
+			FROM analytics_db_subnetworksystem.user_usage_hourly
 			WHERE user_id = ? AND date >= ? AND date <= ?
 			GROUP BY date, hour, user_id, username
 			ORDER BY hour
@@ -116,7 +116,7 @@ func (s *analyticsService) GetWorkerHealth(ctx context.Context, workerID uuid.UU
 		SELECT 
 			worker_id, worker_name, region, status, cpu_usage, memory_usage,
 			active_connections, total_connections, bytes_throughput_per_sec, error_rate
-		FROM analytics.worker_health
+		FROM analytics_db_subnetworksystem.worker_health
 		WHERE worker_id = ? AND timestamp >= ? AND timestamp <= ?
 		ORDER BY timestamp
 		LIMIT 1000
@@ -134,7 +134,7 @@ func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID uuid
 			user_id, username, domain, subdomain, full_url,
 			bytes_sent, bytes_received, request_method, status_code,
 			content_type, source_ip
-		FROM analytics.website_access
+		FROM analytics_db_subnetworksystem.website_access
 		WHERE user_id = ? AND timestamp >= ? AND timestamp <= ?
 		ORDER BY timestamp
 		LIMIT 1000
@@ -179,7 +179,7 @@ func (s *analyticsService) flushUserData(items []models.UserDataUsage) {
 		return
 	}
 	ctx := context.Background()
-	query := `INSERT INTO analytics.user_data_usage (
+	query := `INSERT INTO analytics_db_subnetworksystem.user_data_usage (
 			user_id, username, pool_id, pool_name, worker_id, worker_region,
 			bytes_sent, bytes_received, source_ip,
 			protocol, destination_host, destination_port, status_code
@@ -235,7 +235,7 @@ func (s *analyticsService) flushWebsiteAccess(items []models.WebsiteAccess) {
 		return
 	}
 	ctx := context.Background()
-	query := `INSERT INTO analytics.website_access (
+	query := `INSERT INTO analytics_db_subnetworksystem.website_access (
 			user_id, username, domain, subdomain, full_url,
 			bytes_sent, bytes_received, request_method, status_code,
 			content_type, source_ip
