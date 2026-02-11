@@ -1,20 +1,8 @@
-BEGIN;
+-- ⚠️  WARNING: This seed file is for DEVELOPMENT/TESTING only.
+-- Do NOT use in production. Real credentials must be injected
+-- via admin API or a separate, non-committed migration.
 
-----------------------------------------------------------
--- 1. Clear existing data
-----------------------------------------------------------
-TRUNCATE TABLE 
-    worker_domains,
-    worker,
-    pool_upstream_weight,
-    upstream,
-    user_pools,
-    pool,
-    user_ip_whitelist,
-    "user",
-    country,
-    region
-CASCADE;
+BEGIN;
 
 ----------------------------------------------------------
 -- 2. Regions
@@ -93,18 +81,18 @@ WHERE
 -- 8. Upstreams
 ----------------------------------------------------------
 INSERT INTO upstream (tag, upstream_provider,username,password, config_format, port, domain) VALUES
-('netnutusa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6500, 'netnut.x.proxiess.com'),
-('netnutsocks5usa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6503, 'socksnetnut.x.proxiess.com'),
-('geonodeusa', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyalusa', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9789, 'boilingresi.x.proxiess.com'),
+('netnutusa', 'netnut', 'CHANGE_ME_USER', 'CHANGE_ME_PASS', '-res-[country]-sid-[session]', 6500, 'netnut.x.proxiess.com'),
+('netnutsocks5usa', 'netnut', 'CHANGE_ME_USER', 'CHANGE_ME_PASS', '-res-[country]-sid-[session]', 6503, 'socksnetnut.x.proxiess.com'),
+('geonodeusa', 'geonode', 'CHANGE_ME_USER', 'CHANGE_ME_PASS', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
+('iproyalusa', 'iproyal','CHANGE_ME_USER', 'CHANGE_ME_PASS', '-country-[country]_session-[session]_lifetime-1h', 9789, 'boilingresi.x.proxiess.com'),
 
-('netnuteu', 'netnut','uscFAPhxyGer', '9dgbjKKV', '-res-[country]-sid-[session]', 6501, 'netnutasia.x.proxiess.com'),
-('geonodeeu', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyaleu', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9790, 'boilingresieu.x.proxiess.com'),
+('netnuteu', 'netnut','CHANGE_ME_USER', 'CHANGE_ME_PASS', '-res-[country]-sid-[session]', 6501, 'netnutasia.x.proxiess.com'),
+('geonodeeu', 'geonode', 'CHANGE_ME_USER', 'CHANGE_ME_PASS', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
+('iproyaleu', 'iproyal','CHANGE_ME_USER', 'CHANGE_ME_PASS', '-country-[country]_session-[session]_lifetime-1h', 9790, 'boilingresieu.x.proxiess.com'),
 
-('netnutasia', 'netnut','cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6502, 'netnuteu.x.proxiess.com'),
-('geonodeasia', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyalasia', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9791, 'boilingresiasia.x.proxiess.com');
+('netnutasia', 'netnut','CHANGE_ME_USER', 'CHANGE_ME_PASS', '-res-[country]-sid-[session]', 6502, 'netnuteu.x.proxiess.com'),
+('geonodeasia', 'geonode', 'CHANGE_ME_USER', 'CHANGE_ME_PASS', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
+('iproyalasia', 'iproyal','CHANGE_ME_USER', 'CHANGE_ME_PASS', '-country-[country]_session-[session]_lifetime-1h', 9791, 'boilingresiasia.x.proxiess.com');
 
 
 ----------------------------------------------------------

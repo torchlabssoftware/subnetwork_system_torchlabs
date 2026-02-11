@@ -1,5 +1,26 @@
+# Proxy build artifacts
 proxy.crt
 proxy.exe
 proxy.key
-.env.dev
-.env.prod
+
+# Environment files
+.env*
+*.env
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+LICENSE
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker (not needed inside image)
+.dockerignore
+Dockerfile

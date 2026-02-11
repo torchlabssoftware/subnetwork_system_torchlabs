@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${DOCKERHUB_USERNAME}/captain:latest
+    image: ${DOCKERHUB_USERNAME}/captain:${IMAGE_TAG:-latest}
     container_name: subnetwork_system_prod
     depends_on:
       postgres_prod:
@@ -21,7 +21,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/seed:/docker-entrypoint-initdb.d
@@ -38,13 +38,13 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB}
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./sql/clickhouse:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      test: ["CMD", "clickhouse-client", "--user", "${CLICKHOUSE_USER:-default}", "--password", "${CLICKHOUSE_PASSWORD:-}", "--query", "SELECT 1"]
       interval: 5s
       timeout: 5s
       retries: 5  

@@ -1,11 +1,30 @@
-.env.dev
-.env.prod
-.gitignore
+# Environment files
+.env*
+*.env
+
+# Git
 .git
-tmp/
+.gitignore
+
+# Documentation
+*.md
+LICENSE
+
+# Tests
+tests/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
 .air.toml
+
+# Temp / Debug
+tmp/
 dump_data.txt
+
+# Docker (not needed inside image)
 .dockerignore
-.docker-compose.dev.yml
-.docker-compose.prod.yml
+docker-compose*.yml
 Dockerfile

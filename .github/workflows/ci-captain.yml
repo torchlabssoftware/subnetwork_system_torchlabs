@@ -7,13 +7,17 @@ on:
       - 'captain/**'
     tags:
       - 'v*'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'captain/**'
   workflow_dispatch:
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/captain
 
 jobs:
-  build-and-push:
+  build-and-test:
     runs-on: ubuntu-latest
     environment: dev
     
@@ -35,7 +39,7 @@ jobs:
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-          POSTGRES_URL=postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/${{ secrets.POSTGRES_DB }}?sslmode=disable
+          POSTGRES_URL=${{ secrets.POSTGRES_URL }}
           ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
           WORKER_API_KEY=${{ secrets.WORKER_API_KEY }}
           CLICKHOUSE_USER=${{ secrets.CLICKHOUSE_USER }}
@@ -49,22 +53,47 @@ jobs:
         working-directory: ./captain
 
       - name: Wait for services to be ready
-        run: sleep 20s
+        working-directory: ./captain
+        run: |
+          echo "Waiting for services to be healthy..."
+          for i in $(seq 1 30); do
+            if docker compose --env-file .env.dev -f docker-compose.dev.yml ps --format json | grep -qE '"Health":"starting"|"Health":"unhealthy"'; then
+              echo "Attempt $i/30: Services not ready yet..."
+              sleep 2
+            else
+              echo "All services are healthy!"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "ERROR: Services failed to become healthy within 60s"
+              docker compose --env-file .env.dev -f docker-compose.dev.yml ps
+              docker compose --env-file .env.dev -f docker-compose.dev.yml logs
+              exit 1
+            fi
+          done
 
       - name: Run tests
         working-directory: ./captain
         run: go test ./tests/e2e/...
 
+      - name: Cleanup Docker Compose
+        if: always()
+        run: docker compose --env-file .env.dev -f docker-compose.dev.yml down -v
+        working-directory: ./captain
+
       - name: Set up Docker Buildx
+        if: github.event_name != 'pull_request'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for Docker
+        if: github.event_name != 'pull_request'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -75,6 +104,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
+        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
         with:
           context: ./captain
@@ -86,14 +116,18 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    needs: build-and-push
+    needs: build-and-test
     runs-on: ubuntu-latest
     environment: prod
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: set_tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       - name: Fix file permissions on Captain VM
         uses: appleboy/ssh-action@v1.0.3
@@ -102,7 +136,8 @@ jobs:
           username: ${{ secrets.CAPTAIN_VM_USER }}
           key: ${{ secrets.CAPTAIN_VM_SSH_KEY }}
           script: |
-            sudo chown -R $USER:$USER ~/captain/sql || true
+            mkdir -p ~/captain/sql
+            sudo chown -R $USER:$USER ~/captain/sql
 
       - name: Copy files to Captain VM
         uses: appleboy/scp-action@v0.1.7
@@ -121,15 +156,19 @@ jobs:
           username: ${{ secrets.CAPTAIN_VM_USER }}
           key: ${{ secrets.CAPTAIN_VM_SSH_KEY }}
           script: |
-            mkdir -p ~/captain
             cd ~/captain
+
+            # Save current image tag for rollback
+            PREVIOUS_TAG=$(grep -oP 'IMAGE_TAG=\K.*' .env.prod 2>/dev/null || echo "latest")
+
+            # Create .env.prod with restricted permissions
             cat <<EOF > .env.prod
             APP_ENV=${{ secrets.APP_ENV }}
-            PORT=${{ secrets.PORT }}  
+            PORT=${{ secrets.PORT }}
             POSTGRES_USER=${{ secrets.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
             POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-            POSTGRES_URL=postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@postgres_prod:5432/${{ secrets.POSTGRES_DB }}?sslmode=disable
+            POSTGRES_URL=${{ secrets.POSTGRES_URL }}
             ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
             WORKER_API_KEY=${{ secrets.WORKER_API_KEY }}
             CLICKHOUSE_USER=${{ secrets.CLICKHOUSE_USER }}
@@ -137,6 +176,33 @@ jobs:
             CLICKHOUSE_DB=${{ secrets.CLICKHOUSE_DB }}
             CLICKHOUSE_URL=${{ secrets.CLICKHOUSE_URL }}
             DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            IMAGE_TAG=${{ steps.set_tag.outputs.IMAGE_TAG }}
             EOF
+            chmod 600 .env.prod
+
+            # Pull and deploy new version
             docker compose --env-file .env.prod -f docker-compose.prod.yml pull
             docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+
+            # Health check — wait for app container to be running
+            echo "Running post-deploy health check..."
+            HEALTHY=false
+            for i in $(seq 1 15); do
+              if docker ps --filter "name=subnetwork_system_prod" --format '{{.Status}}' | grep -q "Up"; then
+                HEALTHY=true
+                echo "App container is running (attempt $i/15)"
+                break
+              fi
+              echo "Waiting for app to start (attempt $i/15)..."
+              sleep 4
+            done
+
+            if [ "$HEALTHY" != "true" ]; then
+              echo "ERROR: Deployment failed! Rolling back to previous tag: $PREVIOUS_TAG"
+              sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=$PREVIOUS_TAG/" .env.prod
+              docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+              docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+              exit 1
+            fi
+
+            echo "Deployment successful! Running image tag: ${{ steps.set_tag.outputs.IMAGE_TAG }}"

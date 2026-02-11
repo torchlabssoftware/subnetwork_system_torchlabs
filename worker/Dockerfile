@@ -16,12 +16,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o proxy .
 # -------------------------------
 # 2. Run Stage (Alpine for shell/openssl support)
 # -------------------------------
-FROM alpine:latest
+FROM alpine:3.19
 
 # Install runtime dependencies (openssl for keygen, ca-certificates)
 RUN apk add --no-cache ca-certificates tzdata openssl
 
-RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo "Asia/Shanghai" > /etc/timezone
+ENV TZ=UTC
+RUN cp /usr/share/zoneinfo/${TZ} /etc/localtime && echo "${TZ}" > /etc/timezone
 COPY --from=builder /app/proxy /proxy
 COPY entrypoint.sh /entrypoint.sh
 
