@@ -50,7 +50,7 @@ func initConfig() (err error) {
 
 	// worker Configuration
 	captainURL := envConfig.CaptainURL
-	apiKey := envConfig.APIKey
+	apiKey := envConfig.WorkerAPIKey
 	workerID := app.Flag("worker-id", "Worker ID UUID").String()
 
 	//########http#########

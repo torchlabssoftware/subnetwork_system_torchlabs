@@ -1,0 +1,93 @@
+---
+- name: Fetch and Group Workers
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    captain_url: "{{ lookup('env', 'CAPTAIN_URL') | default('http://localhost:8080', true) }}"
+    admin_api_key: "{{ lookup('env', 'ADMIN_API_KEY') }}"
+  tasks:
+    - name: Validate Environment Variables
+      fail:
+        msg: "ADMIN_API_KEY environment variable is required."
+      when: admin_api_key == ""
+
+    - name: Fetch workers from Captain API
+      uri:
+        url: "{{ captain_url }}/admin/workers"
+        method: GET
+        headers:
+          Authorization: "ApiKey {{ admin_api_key }}"
+        return_content: yes
+      register: workers_response
+
+    - name: Parse response
+      set_fact:
+        workers_list: "{{ workers_response.json.data | default(workers_response.json) }}"
+
+    - name: Group workers by IP
+      add_host:
+        name: "{{ item.ip_address }}"
+        groups: worker_nodes
+        node_workers: "{{ workers_list | selectattr('ip_address', 'equalto', item.ip_address) | list }}"
+        ansible_ssh_user: ubuntu # Default, override in inventory or cmd line
+      loop: "{{ workers_list }}"
+      changed_when: false
+
+- name: Deploy Workers
+  hosts: worker_nodes
+  become: true
+  vars:
+    captain_url: "{{ hostvars['localhost']['captain_url'] }}"
+    worker_api_key: "{{ lookup('env', 'WORKER_API_KEY') }}"
+    app_env: "production"
+    docker_image: "{{ lookup('env', 'DOCKER_IMAGE') }}"
+
+  tasks:
+    - name: Validate Worker API Key
+      fail:
+        msg: "WORKER_API_KEY environment variable is required."
+      when: worker_api_key == ""
+
+    # Ensure Docker is installed (simplified check/install for Debian/Ubuntu)
+    - name: Ensure Docker is installed
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Pull Docker image
+      docker_image:
+        name: "{{ docker_image }}"
+        source: pull
+
+    - name: Run Worker Containers
+      docker_container:
+        name: "worker-{{ item.port }}"
+        image: "{{ docker_image }}"
+        state: started
+        recreate: true
+        pull: true
+        restart_policy: always
+        ports:
+          - "{{ item.port }}:{{ item.port }}"
+        env:
+          CAPTAIN_URL: "{{ captain_url }}"
+          API_KEY: "{{ worker_api_key }}"
+          APP_ENV: "{{ app_env }}"
+        command: "http --worker-id {{ item.id }} -p :{{ item.port }} --always"
+        # Log driver to ensure logs are captured
+        log_driver: json-file
+        log_options:
+          max-size: "10m"
+          max-file: "3"
+      loop: "{{ node_workers }}"
+      loop_control:
+        label: "worker-{{ item.port }}"
