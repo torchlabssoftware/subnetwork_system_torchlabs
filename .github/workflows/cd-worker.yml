@@ -12,6 +12,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: prod
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && 
@@ -44,6 +45,7 @@ jobs:
           CAPTAIN_URL: ${{ secrets.CAPTAIN_URL }}
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
           WORKER_API_KEY: ${{ secrets.WORKER_API_KEY }}
+          DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/worker:latest
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
           ansible-playbook ansible/deploy_workers.yml \

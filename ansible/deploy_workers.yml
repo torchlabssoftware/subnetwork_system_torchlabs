@@ -23,7 +23,7 @@
 
     - name: Parse response
       set_fact:
-        workers_list: "{{ workers_response.json }}"
+        workers_list: "{{ workers_response.json.data | default(workers_response.json) }}"
 
     - name: Group workers by IP
       add_host:
@@ -41,7 +41,7 @@
     captain_url: "{{ hostvars['localhost']['captain_url'] }}"
     worker_api_key: "{{ lookup('env', 'WORKER_API_KEY') }}"
     app_env: "production"
-    docker_image: "torchlabs/worker:latest"
+    docker_image: "{{ lookup('env', 'DOCKER_IMAGE') }}"
 
   tasks:
     - name: Validate Worker API Key
@@ -73,6 +73,8 @@
         name: "worker-{{ item.port }}"
         image: "{{ docker_image }}"
         state: started
+        recreate: true
+        pull: true
         restart_policy: always
         ports:
           - "{{ item.port }}:{{ item.port }}"
