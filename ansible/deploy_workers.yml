@@ -30,7 +30,7 @@
         name: "{{ item.ip_address }}"
         groups: worker_nodes
         node_workers: "{{ workers_list | selectattr('ip_address', 'equalto', item.ip_address) | list }}"
-        ansible_ssh_user: ubuntu # Default, override in inventory or cmd line
+        ansible_ssh_user: pubudu
       loop: "{{ workers_list }}"
       changed_when: false
 
@@ -40,7 +40,7 @@
   vars:
     captain_url: "{{ hostvars['localhost']['captain_url'] }}"
     worker_api_key: "{{ lookup('env', 'WORKER_API_KEY') }}"
-    app_env: "production"
+    app_env: "prod"
     docker_image: "{{ lookup('env', 'DOCKER_IMAGE') }}"
 
   tasks:
