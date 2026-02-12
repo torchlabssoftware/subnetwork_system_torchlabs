@@ -4,7 +4,7 @@
   connection: local
   gather_facts: false
   vars:
-    captain_url: "{{ lookup('env', 'CAPTAIN_URL') | default('http://localhost:8080', true) }}"
+    captain_url: "{{ lookup('env', 'CAPTAIN_URL')}"
     admin_api_key: "{{ lookup('env', 'ADMIN_API_KEY') }}"
   tasks:
     - name: Validate Environment Variables
@@ -30,7 +30,7 @@
         name: "{{ item.ip_address }}"
         groups: worker_nodes
         node_workers: "{{ workers_list | selectattr('ip_address', 'equalto', item.ip_address) | list }}"
-        ansible_ssh_user: pubudu
+        ansible_ssh_user: "{{ lookup('env','VM_USER') }}"
       loop: "{{ workers_list }}"
       changed_when: false
 
