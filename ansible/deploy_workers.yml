@@ -38,7 +38,7 @@
   hosts: worker_nodes
   become: true
   vars:
-    captain_url: "{{ hostvars['localhost']['captain_url'] }}"
+    captain_url: "{{ lookup('env', 'CAPTAIN_URL') }}"
     worker_api_key: "{{ lookup('env', 'WORKER_API_KEY') }}"
     app_env: "prod"
     docker_image: "{{ lookup('env', 'DOCKER_IMAGE') }}"
