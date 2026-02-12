@@ -9,8 +9,9 @@ import (
 )
 
 type EnvConfig struct {
-	CaptainURL string
-	APIKey     string
+	CaptainURL   string
+	AdminAPIKey  string
+	WorkerAPIKey string
 }
 
 func EnvLoad() EnvConfig {
@@ -26,8 +27,9 @@ func EnvLoad() EnvConfig {
 	}
 
 	config := EnvConfig{
-		CaptainURL: getEnv("CAPTAIN_URL", ""),
-		APIKey:     getEnv("API_KEY", ""),
+		CaptainURL:   getEnv("CAPTAIN_URL", ""),
+		AdminAPIKey:  getEnv("ADMIN_API_KEY", ""),
+		WorkerAPIKey: getEnv("WORKER_API_KEY", ""),
 	}
 
 	config.validate()
@@ -44,8 +46,9 @@ func getEnv(key, fallback string) string {
 
 func (c *EnvConfig) validate() {
 	required := map[string]string{
-		"CAPTAIN_URL": c.CaptainURL,
-		"API_KEY":     c.APIKey,
+		"CAPTAIN_URL":    c.CaptainURL,
+		"ADMIN_API_KEY":  c.AdminAPIKey,
+		"WORKER_API_KEY": c.WorkerAPIKey,
 	}
 
 	var message strings.Builder

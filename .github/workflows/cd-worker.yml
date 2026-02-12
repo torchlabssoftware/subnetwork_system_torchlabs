@@ -1,0 +1,51 @@
+name: Deploy Workers
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Worker Image"]
+    types:
+      - completed
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && 
+       github.event.workflow_run.head_branch == 'master')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Ansible
+        run: |
+          pip install ansible
+          ansible --version
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.WORKER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Add known_hosts check skip
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+
+      - name: Run Ansible Playbook
+        env:
+          CAPTAIN_URL: ${{ secrets.CAPTAIN_URL }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+          WORKER_API_KEY: ${{ secrets.WORKER_API_KEY }}
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: |
+          ansible-playbook ansible/deploy_workers.yml \
+            -u ${{ secrets.VM_USER }} \
+            --private-key ~/.ssh/id_rsa
