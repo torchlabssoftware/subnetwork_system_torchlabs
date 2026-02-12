@@ -46,16 +46,10 @@ INSERT INTO "user" (username, password, status) VALUES
 ----------------------------------------------------------
 -- 5. IP Whitelist
 ----------------------------------------------------------
-INSERT INTO user_ip_whitelist (user_id, ip_cidr)
-SELECT u.id, w.ip
-FROM "user" u
-CROSS JOIN (
-    VALUES
-    ('192.168.1.0/24'),
-    ('10.0.0.0/8'),
-    ('203.0.113.0/24')
-) AS w(ip)
-WHERE u.username IN ('345rw3r5', 'gr74gtr4');
+INSERT INTO user_ip_whitelist (user_id, ip_cidr) VALUES
+((SELECT id FROM "user" WHERE username='gr74gtr4'), '0.0.0.0/0'),
+((SELECT id FROM "user" WHERE username='345rw3r5'), '0.0.0.0/0'),
+((SELECT id FROM "user" WHERE username='fgn9i8wd'), '0.0.0.0/0');
 
 ----------------------------------------------------------
 -- 6. Pools
@@ -73,9 +67,9 @@ INSERT INTO pool (tag, region_id, subdomain, port) VALUES
 ('iproyaleu',        (SELECT id FROM region WHERE name='Europe'),        'iproyal.eu',       8001),
 ('iproyalasia',      (SELECT id FROM region WHERE name='Asia'),          'iproyal.asia',     8002),
 
-('geonodeusa',       (SELECT id FROM region WHERE name='North America'), '136.116.66.60',     9000),
-('geonodeeu',        (SELECT id FROM region WHERE name='Europe'),        '34.88.145.246',     9001),
-('geonodeasia',      (SELECT id FROM region WHERE name='Asia'),          '34.131.224.30',   9002);
+('geonodeusa',       (SELECT id FROM region WHERE name='North America'), 'geonode.usa',     9000),
+('geonodeeu',        (SELECT id FROM region WHERE name='Europe'),        'geonode.eu',     9001),
+('geonodeasia',      (SELECT id FROM region WHERE name='Asia'),          'geonode.asia',   9002);
 
 ----------------------------------------------------------
 -- 7. Assign Users to Pools
@@ -86,8 +80,8 @@ FROM pool p
 JOIN "user" u ON TRUE
 WHERE
     u.username = 'gr74gtr4'
-    OR (u.username = '345rw3r5' AND p.tag LIKE 'netnut%')
-    OR (u.username = 'fgn9i8wd' AND p.tag LIKE 'geonode%');
+    OR u.username = '345rw3r5' 
+    OR u.username = 'fgn9i8wd'
 
 ----------------------------------------------------------
 -- 8. Upstreams
@@ -124,18 +118,18 @@ VALUES
 -- 10. Workers
 ----------------------------------------------------------
 INSERT INTO worker (name, region_id, ip_address,status, pool_id,port, last_seen) VALUES
-('usa-00000000000000000000000000000000', (SELECT id FROM region WHERE name='North America'), '34.67.96.169', 'active', (SELECT id FROM pool WHERE tag='geonodeusa'),9000, NOW()),
-('usa-11111111111111111111111111111111', (SELECT id FROM region WHERE name='North America'), '34.67.96.169', 'active', (SELECT id FROM pool WHERE tag='netnutsocks5usa'),7003, NOW()),
-('eu-00000000000000000000000000000000',  (SELECT id FROM region WHERE name='Europe'), '34.88.82.214', 'active', (SELECT id FROM pool WHERE tag='geonodeeu'),9001, NOW()),
-('asia-00000000000000000000000000000000',(SELECT id FROM region WHERE name='Asia'), '34.131.224.206', 'active', (SELECT id FROM pool WHERE tag='geonodeasia'),9002, NOW());
+('usa-00000000000000000000000000000000', (SELECT id FROM region WHERE name='North America'), '35.184.180.15', 'active', (SELECT id FROM pool WHERE tag='geonodeusa'),9000, NOW()),
+('usa-11111111111111111111111111111111', (SELECT id FROM region WHERE name='North America'), '35.184.180.15', 'active', (SELECT id FROM pool WHERE tag='netnutsocks5usa'),7003, NOW()),
+('eu-00000000000000000000000000000000',  (SELECT id FROM region WHERE name='Europe'), '34.88.135.41', 'active', (SELECT id FROM pool WHERE tag='geonodeeu'),9001, NOW()),
+('asia-00000000000000000000000000000000',(SELECT id FROM region WHERE name='Asia'), '34.131.147.168', 'active', (SELECT id FROM pool WHERE tag='geonodeasia'),9002, NOW());
 
 ----------------------------------------------------------
 -- 11. Worker Domains
 ----------------------------------------------------------
 INSERT INTO worker_domains (worker_id, domain) VALUES
-((SELECT id FROM worker WHERE name='usa-00000000000000000000000000000000'), 'geonode.usa.upstream-y.com'),
-((SELECT id FROM worker WHERE name='eu-00000000000000000000000000000000'),  'netnut.eu.upstream-y.com'),
-((SELECT id FROM worker WHERE name='asia-00000000000000000000000000000000'),'netnut.asia.upstream-y.com');
+((SELECT id FROM worker WHERE name='usa-00000000000000000000000000000000'), 'geonode.usa.trytorchlabs.com'),
+((SELECT id FROM worker WHERE name='eu-00000000000000000000000000000000'),  'netnut.eu.trytorchlabs.com'),
+((SELECT id FROM worker WHERE name='asia-00000000000000000000000000000000'),'netnut.asia.trytorchlabs.com');
 
 ----------------------------------------------------------
 -- Summary
