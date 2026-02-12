@@ -35,10 +35,14 @@ jobs:
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          printf "%s\n" "${{ secrets.WORKER_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.WORKER_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           # Add known_hosts check skip
           echo "StrictHostKeyChecking no" > ~/.ssh/config
+
+      - name: Debug SSH key
+        run: |
+          cat ~/.ssh/id_rsa
 
       - name: Run Ansible Playbook
         env:
@@ -46,8 +50,8 @@ jobs:
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
           WORKER_API_KEY: ${{ secrets.WORKER_API_KEY }}
           DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/worker:latest
+          VM_USER: ${{ secrets.VM_USER }}
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
           ansible-playbook ansible/deploy_workers.yml \
-            -u ${{ secrets.VM_USER }} \
             --private-key ~/.ssh/id_rsa
