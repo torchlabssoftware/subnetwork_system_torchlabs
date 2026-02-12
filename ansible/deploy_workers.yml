@@ -14,7 +14,7 @@
 
     - name: Fetch workers from Captain API
       uri:
-        url: "{{ captain_url }}/admin/workers"
+        url: "{{ captain_url }}/admin/worker"
         method: GET
         headers:
           Authorization: "ApiKey {{ admin_api_key }}"
