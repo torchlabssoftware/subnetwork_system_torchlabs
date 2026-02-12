@@ -50,13 +50,6 @@
       when: worker_api_key == ""
 
     # Ensure Docker is installed (simplified check/install for Debian/Ubuntu)
-    - name: Ensure Docker is installed
-      apt:
-        name: docker.io
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "Debian"
-
     - name: Ensure Docker service is running
       service:
         name: docker
