@@ -112,16 +112,19 @@ VALUES
 ((SELECT id FROM pool WHERE tag='netnutasia'), (SELECT id FROM upstream WHERE tag='netnutasia'), 50),
 ((SELECT id FROM pool WHERE tag='geonodeusa'), (SELECT id FROM upstream WHERE tag='geonodeusa'), 50),
 ((SELECT id FROM pool WHERE tag='geonodeeu'), (SELECT id FROM upstream WHERE tag='geonodeeu'), 50),
-((SELECT id FROM pool WHERE tag='geonodeasia'), (SELECT id FROM upstream WHERE tag='geonodeasia'), 50);
+((SELECT id FROM pool WHERE tag='geonodeasia'), (SELECT id FROM upstream WHERE tag='geonodeasia'), 50),
+((SELECT id FROM pool WHERE tag='iproyalusa'), (SELECT id FROM upstream WHERE tag='iproyalusa'), 50),
+((SELECT id FROM pool WHERE tag='iproyaleu'), (SELECT id FROM upstream WHERE tag='iproyaleu'), 50),
+((SELECT id FROM pool WHERE tag='iproyalasia'), (SELECT id FROM upstream WHERE tag='iproyalasia'), 50);
 
 ----------------------------------------------------------
 -- 10. Workers
 ----------------------------------------------------------
 INSERT INTO worker (name, region_id, ip_address,status, pool_id,port, last_seen) VALUES
-('usa-00000000000000000000000000000000', (SELECT id FROM region WHERE name='North America'), '35.184.180.15', 'active', (SELECT id FROM pool WHERE tag='geonodeusa'),9000, NOW()),
+('usa-00000000000000000000000000000000', (SELECT id FROM region WHERE name='North America'), '35.184.180.15', 'active', (SELECT id FROM pool WHERE tag='iproyalusa'),8000, NOW()),
 ('usa-11111111111111111111111111111111', (SELECT id FROM region WHERE name='North America'), '35.184.180.15', 'active', (SELECT id FROM pool WHERE tag='netnutsocks5usa'),7003, NOW()),
-('eu-00000000000000000000000000000000',  (SELECT id FROM region WHERE name='Europe'), '34.88.135.41', 'active', (SELECT id FROM pool WHERE tag='geonodeeu'),9001, NOW()),
-('asia-00000000000000000000000000000000',(SELECT id FROM region WHERE name='Asia'), '34.131.147.168', 'active', (SELECT id FROM pool WHERE tag='geonodeasia'),9002, NOW());
+('eu-00000000000000000000000000000000',  (SELECT id FROM region WHERE name='Europe'), '34.88.135.41', 'active', (SELECT id FROM pool WHERE tag='iproyaleu'),8001, NOW()),
+('asia-00000000000000000000000000000000',(SELECT id FROM region WHERE name='Asia'), '34.131.147.168', 'active', (SELECT id FROM pool WHERE tag='iproyalasia'),8002, NOW());
 
 ----------------------------------------------------------
 -- 11. Worker Domains
