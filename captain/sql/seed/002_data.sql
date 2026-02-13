@@ -87,18 +87,18 @@ WHERE
 -- 8. Upstreams
 ----------------------------------------------------------
 INSERT INTO upstream (tag, upstream_provider,username,password, config_format, port, domain) VALUES
-('netnutusa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6500, 'netnut.x.proxiess.com'),
-('netnutsocks5usa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6503, 'socksnetnut.x.proxiess.com'),
-('geonodeusa', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyalusa', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9789, 'boilingresi.x.proxiess.com'),
+('netnutusa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res[_sc]-[country]_[state]_[city]-sid-[session]', 6500, 'netnut.x.proxiess.com'),
+('netnutsocks5usa', 'netnut', 'cFAPhxyG', '9dgbjKKV', '-res[_sc]-[country]_[state]_[city]-sid-[session]', 6503, 'socksnetnut.x.proxiess.com'),
+('geonodeusa', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-state-[state]-session-[session]-lifetime-[lifetime_value]', 9000, 'premium-residential.geonode.com'),
+('iproyalusa', 'iproyal','upstreamnsstandardplan', 'fgt3cbpjrahwducd_country-ca', '_country-[country]_city-[city]_session-[session]_lifetime-[lifetime_value][h/m]', 12321, 'geo.iproyal.com'),
 
-('netnuteu', 'netnut','uscFAPhxyGer', '9dgbjKKV', '-res-[country]-sid-[session]', 6501, 'netnutasia.x.proxiess.com'),
-('geonodeeu', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyaleu', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9790, 'boilingresieu.x.proxiess.com'),
+('netnuteu', 'netnut','uscFAPhxyGer', '9dgbjKKV', '-res[_sc]-[country]_[state]_[city]-sid-[session]', 6501, 'netnutasia.x.proxiess.com'),
+('geonodeeu', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-state-[state]-session-[session]-lifetime-[lifetime_value]', 9000, 'premium-residential.geonode.com'),
+('iproyaleu', 'iproyal','upstreamnsstandardplan', 'fgt3cbpjrahwducd_country-de', '_country-[country]_city-[city]_session-[session]_lifetime-[lifetime_value][h/m]', 12321, 'geo.iproyal.com'),
 
-('netnutasia', 'netnut','cFAPhxyG', '9dgbjKKV', '-res-[country]-sid-[session]', 6502, 'netnuteu.x.proxiess.com'),
-('geonodeasia', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-session-[session]-lifetime-60', 9000, 'premium-residential.geonode.com'),
-('iproyalasia', 'iproyal','otJhMuv0', '5uhhT0Ds', '-country-[country]_session-[session]_lifetime-1h', 9791, 'boilingresiasia.x.proxiess.com');
+('netnutasia', 'netnut','cFAPhxyG', '9dgbjKKV', '-res[_sc]-[country]_[state]_[city]-sid-[session]', 6502, 'netnuteu.x.proxiess.com'),
+('geonodeasia', 'geonode', 'pxy_ud5azgr1', '06e4ddd1-e608-4be6-971b-bef71b53ac1e', '-country-[country]-state-[state]-session-[session]-lifetime-[lifetime_value]', 9000, 'premium-residential.geonode.com'),
+('iproyalasia', 'iproyal','upstreamnsstandardplan', 'fgt3cbpjrahwducd_country-jp', '_country-[country]_city-[city]_session-[session]_lifetime-[lifetime_value][h/m]', 12321, 'geo.iproyal.com');
 
 
 ----------------------------------------------------------
