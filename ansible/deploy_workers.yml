@@ -40,6 +40,7 @@
   vars:
     captain_url: "{{ lookup('env', 'CAPTAIN_URL') }}"
     worker_api_key: "{{ lookup('env', 'WORKER_API_KEY') }}"
+    admin_api_key: "{{ lookup('env', 'ADMIN_API_KEY') }}"
     app_env: "prod"
     docker_image: "{{ lookup('env', 'DOCKER_IMAGE') }}"
 
@@ -73,7 +74,8 @@
           - "{{ item.port }}:{{ item.port }}"
         env:
           CAPTAIN_URL: "{{ captain_url }}"
-          API_KEY: "{{ worker_api_key }}"
+          WORKER_API_KEY: "{{ worker_api_key }}"
+          ADMIN_API_KEY: "{{ admin_api_key }}"
           APP_ENV: "{{ app_env }}"
         command: "http --worker-id {{ item.id }} -p :{{ item.port }} --always"
         # Log driver to ensure logs are captured
