@@ -200,9 +200,9 @@ func convertTag(username, password string, tag utils.Tag, upstream string) strin
 		if tag.Country != "" {
 			newstring += "-country-" + tag.Country
 		}
-		/*if tag.State != "" {
-			newstring += "_" + tag.State
-		}*/
+		if tag.State != "" {
+			newstring += "-state-" + tag.State
+		}
 		if tag.City != "" {
 			newstring += "-city-" + tag.City
 		}
@@ -218,9 +218,6 @@ func convertTag(username, password string, tag utils.Tag, upstream string) strin
 		if tag.Country != "" {
 			newstring += "_country-" + tag.Country
 		}
-		/*if tag.State != "" {
-			newstring += "_" + tag.State
-		}*/
 		if tag.City != "" {
 			newstring += "_city-" + tag.City
 		}
@@ -228,7 +225,11 @@ func convertTag(username, password string, tag utils.Tag, upstream string) strin
 			newstring += "_session-" + tag.Session
 		}
 		if tag.Lifetime > 0 {
-			newstring += "_lifetime-" + strconv.Itoa(tag.Lifetime) + "m"
+			if tag.Lifetime < 60 {
+				newstring += "_lifetime-" + strconv.Itoa(tag.Lifetime) + "m"
+			} else {
+				newstring += "_lifetime-" + strconv.Itoa(tag.Lifetime/60) + "h"
+			}
 		}
 	}
 	return newstring
