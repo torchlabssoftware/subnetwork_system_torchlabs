@@ -403,13 +403,13 @@ func (u *userService) GenerateProxyString(ctx context.Context, req *models.Gener
 		config := functions.GenerateproxyString(*req.PoolGroup, *req.CountryCode, *req.IsSticky, *req.City, *req.State, req.SessionDuration)
 		switch *req.Format {
 		case "ip:port:user:pass":
-			proxyString := fmt.Sprintf("%s"+"upstream-y.com"+":%d:%s:%s%s", subdomain, port, userName, password, config)
+			proxyString := fmt.Sprintf("%s"+".trytorchlabs.com"+":%d:%s:%s%s", subdomain, port, userName, password, config)
 			res = append(res, proxyString)
 		case "user:pass:ip:port":
-			proxyString := fmt.Sprintf("%s:%s%s:%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
+			proxyString := fmt.Sprintf("%s:%s%s:%s"+".trytorchlabs.com"+":%d", userName, password, config, subdomain, port)
 			res = append(res, proxyString)
 		case "user:pass@ip:port":
-			proxyString := fmt.Sprintf("%s:%s%s@%s"+".upstream-y.com"+":%d", userName, password, config, subdomain, port)
+			proxyString := fmt.Sprintf("%s:%s%s@%s"+".trytorchlabs.com"+":%d", userName, password, config, subdomain, port)
 			res = append(res, proxyString)
 		}
 	}

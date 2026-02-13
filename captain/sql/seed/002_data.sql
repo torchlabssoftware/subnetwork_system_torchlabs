@@ -81,7 +81,7 @@ JOIN "user" u ON TRUE
 WHERE
     u.username = 'gr74gtr4'
     OR u.username = '345rw3r5' 
-    OR u.username = 'fgn9i8wd'
+    OR u.username = 'fgn9i8wd';
 
 ----------------------------------------------------------
 -- 8. Upstreams
